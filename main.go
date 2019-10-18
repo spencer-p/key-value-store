@@ -21,7 +21,12 @@ const (
 )
 
 type Config struct {
+	// Port to serve HTTP on
 	Port string `envconfig:"PORT" required:"true"`
+
+	// If empty, this is the main instance.
+	// Otherwise, act as a proxy to the address provided.
+	ForwardingAddr string `envconfig:"FORWARDING_ADDRESS"`
 }
 
 func main() {
@@ -29,10 +34,12 @@ func main() {
 	envconfig.MustProcess("", &env)
 	log.Printf("Configured: %+v\n", env)
 
-	// Create a muxer w/ hw1 routes and corresponding server
+	// Create a mux and route a handler
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	hw1.Route(r)
+	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("TODO"))
+	})
 
 	srv := &http.Server{
 		Handler:      r,
