@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spencer-p/cse138/pkg/follower"
+	"github.com/spencer-p/cse138/pkg/leader"
 	"github.com/spencer-p/cse138/pkg/util"
 
 	"github.com/gorilla/mux"
@@ -34,12 +36,16 @@ func main() {
 	envconfig.MustProcess("", &env)
 	log.Printf("Configured: %+v\n", env)
 
-	// Create a mux and route a handler
+	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("TODO"))
-	})
+	if env.ForwardingAddr == "" {
+		log.Println("Configured as a main instance")
+		leader.Route(r)
+	} else {
+		log.Println("Configured as a follower")
+		follower.Route(r, env.ForwardingAddr)
+	}
 
 	srv := &http.Server{
 		Handler:      r,
