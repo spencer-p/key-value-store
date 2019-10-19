@@ -42,7 +42,7 @@ type Input struct {
 // storage abstracts the volatile kv store for this instance
 type storage struct {
 	store map[string]string
-	m     sync.Mutex
+	m     sync.RWMutex
 }
 
 func newStorage() *storage {
@@ -76,6 +76,18 @@ func (s *storage) Delete(key string) {
 	delete(s.store, key)
 
 	log.Printf("Deleted %q\n", key)
+}
+
+// Read returns the value for a key in the storage.
+func (s *storage) Read(key string) string {
+	s.m.RLock()
+	defer s.m.RUnlock()
+
+	value := s.store[key]
+
+	log.Printf("Reading %q=%q\n", key, value)
+
+	return value
 }
 
 func (s *storage) indexHandler(w http.ResponseWriter, r *http.Request) {
