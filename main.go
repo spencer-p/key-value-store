@@ -22,7 +22,7 @@ import (
 )
 
 type event struct {
-        KEY     string `json:KEY`
+  KEY     string `json:KEY`
 	VALUE   string `json:VALUE`
 }
 
@@ -55,6 +55,8 @@ func putRequest(w http.ResponseWriter, r *http.Request) {
 
 	for i, singleEvent := range events {
 		if singleEvent.KEY == eventKEY {
+      fmt.Fprintf(w, "Potential key replacement at %q", singleEvent.KEY)
+      w.WriteHeader(http.
 			singleEvent.KEY = putRequestEvent.KEY
 			singleEvent.VALUE = putRequestEvent.VALUE
 			events = append(events[:i], singleEvent)
@@ -63,7 +65,7 @@ func putRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-  fmt.Fprintf(w, "New event added through put is key: %s\n", putRequestEvent.Key)
+  fmt.Fprintf(w, "New event added through put is key: %s \n", putRequestEvent.KEY)
 
 	events = append(events, putRequestEvent)
 	w.WriteHeader(http.StatusCreated)
