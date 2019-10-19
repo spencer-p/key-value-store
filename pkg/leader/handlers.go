@@ -3,7 +3,6 @@ package leader
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -19,6 +18,10 @@ const (
 )
 
 type Response struct {
+	// The status code is not marshalled to JSON. The wrapper function uses this
+	// to write the HTTP response body. Defaults to 200.
+	status int
+
 	Message  string `json:"message,omitempty"`
 	Exists   *bool  `json:"doexExist,omitempty"`
 	Replaced *bool  `json:"replaced,omitempty"`
@@ -74,7 +77,7 @@ func (s *storage) indexHandler(w http.ResponseWriter, r *http.Request) {
 	s.Set("TODO", HELLO)
 }
 
-func (s *storage) putHandler(in Input) (res Response) {
+func (s *storage) putHandler(in Input, res *Response) {
 	replaced := s.Set(in.Key, in.Value)
 
 	res.Replaced = &replaced
@@ -83,7 +86,7 @@ func (s *storage) putHandler(in Input) (res Response) {
 	return
 }
 
-func withJSON(next func(Input) Response) http.HandlerFunc {
+func withJSON(next func(Input, *Response)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in Input
 		dec := json.NewDecoder(r.Body)
@@ -96,10 +99,15 @@ func withJSON(next func(Input) Response) http.HandlerFunc {
 		params := mux.Vars(r)
 		in.Key = params["key"]
 
-		result := next(in)
+		result := &Response{
+			// Default to OK status
+			status: http.StatusOK,
+		}
+		next(in, result)
 
+		w.WriteHeader(result.status)
 		enc := json.NewEncoder(w)
-		if err := enc.Encode(&result); err != nil {
+		if err := enc.Encode(result); err != nil {
 			log.Println("Failed to marshal JSON response: ", err)
 			// response writer is likely fubar at this point.
 			return
