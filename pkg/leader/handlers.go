@@ -82,8 +82,6 @@ func (s *storage) putHandler(in Input, res *Response) {
 
 	res.Replaced = &replaced
 	res.Message = PutSuccess
-
-	return
 }
 
 func withJSON(next func(Input, *Response)) http.HandlerFunc {
