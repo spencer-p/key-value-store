@@ -49,7 +49,7 @@ func (s *storage) Delete(key string) {
 
 	delete(s.store, key)
 
-	log.Printf("Deleted %q\n")
+	log.Printf("Deleted %q\n", key)
 }
 
 func (s *storage) indexHandler(w http.ResponseWriter, r *http.Request) {
