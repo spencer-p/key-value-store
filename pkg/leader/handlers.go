@@ -61,18 +61,6 @@ func (s *storage) deleteHandler(in Input, res *Response) {
 }
 
 func (s *storage) putHandler(in Input, res *Response) {
-	if in.Key == "" {
-		res.Error = KeyMissing
-		res.status = http.StatusBadRequest
-		return
-	}
-
-	if len(in.Key) > 50 {
-		res.Error = KeyTooLong
-		res.status = http.StatusBadRequest
-		return
-	}
-
 	if in.Value == "" {
 		res.Error = ValueMissing
 		res.status = http.StatusBadRequest
@@ -103,12 +91,25 @@ func withJSON(next func(Input, *Response)) http.HandlerFunc {
 		params := mux.Vars(r)
 		in.Key = params["key"]
 
-		// Process the request and get a result
+		// Process result
 		result := &Response{
 			// Default to OK status
 			status: http.StatusOK,
 		}
-		next(in, result)
+
+		// Check for valid keys before calling the next handler
+		if in.Key == "" {
+			res.Error = KeyMissing
+			res.status = http.StatusBadRequest
+			return
+		} else if len(in.Key) > 50 {
+			res.Error = KeyTooLong
+			res.status = http.StatusBadRequest
+			return
+		} else {
+			// Only calling next if the key is good
+			next(in, result)
+		}
 
 		// Set header and error text if necessary
 		w.WriteHeader(result.status)
