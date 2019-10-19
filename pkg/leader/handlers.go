@@ -4,7 +4,6 @@ package leader
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
@@ -14,10 +13,21 @@ import (
 
 const (
 	HELLO = "Hello, world!"
+
+	FailedToParse = "Failed to parse request body"
+	PutSuccess    = "Added successfully"
 )
 
-type response struct {
-	Message string `json:"message,omitEmpty"`
+type Response struct {
+	Message  string `json:"message,omitempty"`
+	Exists   *bool  `json:"doexExist,omitempty"`
+	Replaced *bool  `json:"replaced,omitempty"`
+}
+
+// Input stores arguments to each api request
+type Input struct {
+	Key   string
+	Value string `json:"value"`
 }
 
 // storage abstracts the volatile kv store for this instance
@@ -64,17 +74,42 @@ func (s *storage) indexHandler(w http.ResponseWriter, r *http.Request) {
 	s.Set("TODO", HELLO)
 }
 
-func (s *storage) putHandler(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	body, _ := ioutil.ReadAll(r.Body)
-	var value string
-	json.Unmarshal(body, &value)
-	s.Set(params["key"], value)
+func (s *storage) putHandler(in Input) (res Response) {
+	replaced := s.Set(in.Key, in.Value)
+
+	res.Replaced = &replaced
+	res.Message = PutSuccess
+
+	return
+}
+
+func withJSON(next func(Input) Response) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in Input
+		dec := json.NewDecoder(r.Body)
+		if err := dec.Decode(&in); err != nil {
+			log.Println("Could not decode incoming request: ", err)
+			http.Error(w, FailedToParse, http.StatusBadRequest)
+			return
+		}
+
+		params := mux.Vars(r)
+		in.Key = params["key"]
+
+		result := next(in)
+
+		enc := json.NewEncoder(w)
+		if err := enc.Encode(&result); err != nil {
+			log.Println("Failed to marshal JSON response: ", err)
+			// response writer is likely fubar at this point.
+			return
+		}
+	}
 }
 
 func Route(r *mux.Router) {
 	s := newStorage()
 
 	r.HandleFunc("/", s.indexHandler).Methods(http.MethodGet)
-	r.HandleFunc("/kv-store/{key}", s.putHandler).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/{key}", withJSON(s.putHandler)).Methods(http.MethodPut)
 }
