@@ -2,9 +2,12 @@
 package leader
 
 import (
+    "fmt"
 	"log"
 	"net/http"
 	"sync"
+    "io/ioutil"
+    "encoding/json"
 
 	"github.com/gorilla/mux"
 )
@@ -12,6 +15,10 @@ import (
 const (
 	HELLO = "Hello, world!"
 )
+
+type response struct {
+    Message     string      `json:"message,omitEmpty"`
+}
 
 // storage abstracts the volatile kv store for this instance
 type storage struct {
@@ -57,8 +64,20 @@ func (s *storage) indexHandler(w http.ResponseWriter, r *http.Request) {
 	s.Set("TODO", HELLO)
 }
 
+func (s *storage) putHandler(w http.ResponseWriter, r *http.Request) {
+    params := mux.Vars(r)
+    body, _ := ioutil.ReadAll(r.Body)
+    var value string
+    json.Unmarshal(body, &value)
+    s.Set(params["key"], value)
+    for key, val := range s.store {
+        fmt.Println("Key: ", key, "Value:", val)
+    }
+}
+
 func Route(r *mux.Router) {
 	s := newStorage()
 
 	r.HandleFunc("/", s.indexHandler).Methods(http.MethodGet)
+	r.HandleFunc("/kv-store/{key}", s.putHandler).Methods(http.MethodPut)
 }
