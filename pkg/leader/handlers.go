@@ -101,11 +101,9 @@ func withJSON(next func(Input, *Response)) http.HandlerFunc {
 		if in.Key == "" {
 			result.Error = KeyMissing
 			result.status = http.StatusBadRequest
-			return
 		} else if len(in.Key) > 50 {
 			result.Error = KeyTooLong
 			result.status = http.StatusBadRequest
-			return
 		} else {
 			// Only calling next if the key is good
 			next(in, result)
