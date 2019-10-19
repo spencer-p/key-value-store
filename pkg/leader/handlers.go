@@ -70,9 +70,6 @@ func (s *storage) putHandler(w http.ResponseWriter, r *http.Request) {
 	var value string
 	json.Unmarshal(body, &value)
 	s.Set(params["key"], value)
-	for key, val := range s.store {
-		fmt.Println("Key: ", key, "Value:", val)
-	}
 }
 
 func Route(r *mux.Router) {
