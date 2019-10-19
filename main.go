@@ -26,8 +26,7 @@ type event struct {
 
 type allEvents []event
 
-var events = allEvents{
-}
+var events = allEvents{}
 
 const (
 	TIMEOUT = 5 * time.Second
@@ -49,7 +48,7 @@ func putRequest(w http.ResponseWriter, r *http.Request) {
 	reqBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		fmt.Fprintf(w, "invalid format error")
-        }
+  }
 	json.Unmarshal(reqBody, &putRequestEvent)
 
 	for i, singleEvent := range events {
@@ -61,6 +60,8 @@ func putRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+  fmt.Fprintf(w, "New event added through put is key: %s\n", putRequestEvent.Key)
 
 	events = append(events, putRequestEvent)
 	w.WriteHeader(http.StatusCreated)
@@ -77,9 +78,12 @@ func main() {
 	// Create a mux and route a handler
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
+
+  r.HandleFunc("/", putRequest).Methods("PUT")
+  /*
 	r.HandleFunc("/{KEY}", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("TODO"))
-	})
+	})*/
 
 	srv := &http.Server{
 		Handler:      r,
