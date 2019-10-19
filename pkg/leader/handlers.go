@@ -40,16 +40,16 @@ type Input struct {
 }
 
 func (s *storage) getHandler(in Input, res *Response) {
-  value, exists := s.Read(in.Key)
+	value, exists := s.Read(in.Key)
 
-  res.Exists = &exists
-  if exists {
-      res.Message = GetSuccess
-      res.Value = value
-  } else {
-    res.Error = KeyDNE
-    res.status = http.StatusNotFound
-  }
+	res.Exists = &exists
+	if exists {
+		res.Message = GetSuccess
+		res.Value = value
+	} else {
+		res.Error = KeyDNE
+		res.status = http.StatusNotFound
+	}
 }
 
 func (s *storage) putHandler(in Input, res *Response) {
