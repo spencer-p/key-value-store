@@ -45,13 +45,13 @@ func (s *storage) Delete(key string) {
 }
 
 // Read returns the value for a key in the storage.
-func (s *storage) Read(key string) string {
+func (s *storage) Read(key string) (string, bool) {
 	s.m.RLock()
 	defer s.m.RUnlock()
 
-	value := s.store[key]
+	value, ok := s.store[key]
 
 	log.Printf("Reading %q=%q\n", key, value)
 
-	return value
+	return value, ok
 }
