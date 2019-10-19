@@ -2,12 +2,12 @@
 package leader
 
 import (
-    "fmt"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
-    "io/ioutil"
-    "encoding/json"
 
 	"github.com/gorilla/mux"
 )
@@ -17,7 +17,7 @@ const (
 )
 
 type response struct {
-    Message     string      `json:"message,omitEmpty"`
+	Message string `json:"message,omitEmpty"`
 }
 
 // storage abstracts the volatile kv store for this instance
@@ -65,14 +65,14 @@ func (s *storage) indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *storage) putHandler(w http.ResponseWriter, r *http.Request) {
-    params := mux.Vars(r)
-    body, _ := ioutil.ReadAll(r.Body)
-    var value string
-    json.Unmarshal(body, &value)
-    s.Set(params["key"], value)
-    for key, val := range s.store {
-        fmt.Println("Key: ", key, "Value:", val)
-    }
+	params := mux.Vars(r)
+	body, _ := ioutil.ReadAll(r.Body)
+	var value string
+	json.Unmarshal(body, &value)
+	s.Set(params["key"], value)
+	for key, val := range s.store {
+		fmt.Println("Key: ", key, "Value:", val)
+	}
 }
 
 func Route(r *mux.Router) {
