@@ -1,14 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"encoding/json"
 	"context"
 	"errors"
 	"log"
 	"net/http"
 	"os"
-	"io/ioutil"
 	"os/signal"
 	"syscall"
 	"time"
@@ -20,15 +17,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/kelseyhightower/envconfig"
 )
-
-type event struct {
-  KEY     string `json:KEY`
-	VALUE   string `json:VALUE`
-}
-
-type allEvents []event
-
-var events = allEvents{}
 
 const (
 	TIMEOUT = 5 * time.Second
@@ -43,37 +31,6 @@ type Config struct {
 	ForwardingAddr string `envconfig:"FORWARDING_ADDRESS"`
 }
 
-func putRequest(w http.ResponseWriter, r *http.Request) {
-	eventKEY := mux.Vars(r)["KEY"]
-	var putRequestEvent event
-
-	reqBody, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		fmt.Fprintf(w, "invalid format error")
-  }
-	json.Unmarshal(reqBody, &putRequestEvent)
-
-	for i, singleEvent := range events {
-		if singleEvent.KEY == eventKEY {
-      fmt.Fprintf(w, "Potential key replacement at %q", singleEvent.KEY)
-      w.WriteHeader(http.
-			singleEvent.KEY = putRequestEvent.KEY
-			singleEvent.VALUE = putRequestEvent.VALUE
-			events = append(events[:i], singleEvent)
-			json.NewEncoder(w).Encode(singleEvent)
-			return
-		}
-	}
-
-  fmt.Fprintf(w, "New event added through put is key: %s \n", putRequestEvent.KEY)
-
-	events = append(events, putRequestEvent)
-	w.WriteHeader(http.StatusCreated)
-
-	json.NewEncoder(w).Encode(putRequestEvent)
-
-}
-
 func main() {
 	var env Config
 	envconfig.MustProcess("", &env)
@@ -82,12 +39,6 @@ func main() {
 	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-
-  r.HandleFunc("/", putRequest).Methods("PUT")
-  /*
-	r.HandleFunc("/{KEY}", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("TODO"))
-	})*/
 	if env.ForwardingAddr == "" {
 		log.Println("Configured as a main instance")
 		leader.Route(r)
