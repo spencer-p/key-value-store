@@ -5,21 +5,20 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/gorilla/mux"
 )
 
 const (
-	HELLO = "Hello, world!"
-
 	PutSuccess    = "Added successfully"
 	UpdateSuccess = "Updated successfully"
 	GetSuccess    = "Retrieved successfully"
 
 	FailedToParse = "Failed to parse request body"
 	KeyDNE        = "Key does not exist"
+	KeyTooLong    = "Key is too long"
 	ValueMissing  = "Value is missing"
+	KeyMissing    = "Key is missing"
 )
 
 type Response struct {
@@ -40,63 +39,25 @@ type Input struct {
 	Value string `json:"value"`
 }
 
-// storage abstracts the volatile kv store for this instance
-type storage struct {
-	store map[string]string
-	m     sync.RWMutex
-}
-
-func newStorage() *storage {
-	return &storage{
-		store: make(map[string]string),
-		// Note that the zero value for a mutex is unlocked.
-	}
-}
-
-// Set sets key=value and returns true iff the value replaced an old value.
-func (s *storage) Set(key, value string) bool {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	old, updating := s.store[key]
-	s.store[key] = value
-
-	log.Printf("Set %q=%q", key, value)
-	if updating {
-		log.Printf("Old value was %q", old)
-	}
-
-	return updating
-}
-
-// Delete removes a key.
-func (s *storage) Delete(key string) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	delete(s.store, key)
-
-	log.Printf("Deleted %q\n", key)
-}
-
-// Read returns the value for a key in the storage.
-func (s *storage) Read(key string) string {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
-	value := s.store[key]
-
-	log.Printf("Reading %q=%q\n", key, value)
-
-	return value
-}
-
-func (s *storage) indexHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(HELLO))
-	s.Set("TODO", HELLO)
-}
-
 func (s *storage) putHandler(in Input, res *Response) {
+	if in.Key == "" {
+		res.Error = KeyMissing
+		res.status = http.StatusBadRequest
+		return
+	}
+
+	if len(in.Key) > 50 {
+		res.Error = KeyTooLong
+		res.status = http.StatusBadRequest
+		return
+	}
+
+	if in.Value == "" {
+		res.Error = ValueMissing
+		res.status = http.StatusBadRequest
+		return
+	}
+
 	replaced := s.Set(in.Key, in.Value)
 
 	res.Replaced = &replaced
@@ -130,9 +91,10 @@ func withJSON(next func(Input, *Response)) http.HandlerFunc {
 
 		// Set header and error text if necessary
 		w.WriteHeader(result.status)
-		if result.status >= 400 && result.Error == "" {
-			result.Error = "Error in " + r.Method
+		if result.status >= 400 && result.Message == "" {
+			result.Message = "Error in " + r.Method
 		}
+		log.Printf("%d %s\n", result.status, result.Message)
 
 		// Encode the result as JSON and send back
 		enc := json.NewEncoder(w)
@@ -147,6 +109,5 @@ func withJSON(next func(Input, *Response)) http.HandlerFunc {
 func Route(r *mux.Router) {
 	s := newStorage()
 
-	r.HandleFunc("/", s.indexHandler).Methods(http.MethodGet)
-	r.HandleFunc("/kv-store/{key}", withJSON(s.putHandler)).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/{key:.*}", withJSON(s.putHandler)).Methods(http.MethodPut)
 }
