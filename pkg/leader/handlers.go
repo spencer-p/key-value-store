@@ -13,16 +13,22 @@ import (
 const (
 	HELLO = "Hello, world!"
 
-	FailedToParse = "Failed to parse request body"
 	PutSuccess    = "Added successfully"
+	UpdateSuccess = "Updated successfully"
+	GetSuccess    = "Retrieved successfully"
+
+	FailedToParse = "Failed to parse request body"
+	KeyDNE        = "Key does not exist"
+	ValueMissing  = "Value is missing"
 )
 
 type Response struct {
 	// The status code is not marshalled to JSON. The wrapper function uses this
 	// to write the HTTP response body. Defaults to 200.
-	status int
+	status int `json:"-"`
 
 	Message  string `json:"message,omitempty"`
+	Error    string `json:"error,omitempty"`
 	Exists   *bool  `json:"doexExist,omitempty"`
 	Replaced *bool  `json:"replaced,omitempty"`
 }
@@ -82,10 +88,15 @@ func (s *storage) putHandler(in Input, res *Response) {
 
 	res.Replaced = &replaced
 	res.Message = PutSuccess
+	if replaced {
+		res.Message = UpdateSuccess
+	}
 }
 
 func withJSON(next func(Input, *Response)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Parse input
 		var in Input
 		dec := json.NewDecoder(r.Body)
 		if err := dec.Decode(&in); err != nil {
@@ -97,13 +108,20 @@ func withJSON(next func(Input, *Response)) http.HandlerFunc {
 		params := mux.Vars(r)
 		in.Key = params["key"]
 
+		// Process the request and get a result
 		result := &Response{
 			// Default to OK status
 			status: http.StatusOK,
 		}
 		next(in, result)
 
+		// Set header and error text if necessary
 		w.WriteHeader(result.status)
+		if result.status >= 400 && result.Error == "" {
+			result.Error = "Error in " + r.Method
+		}
+
+		// Encode the result as JSON and send back
 		enc := json.NewEncoder(w)
 		if err := enc.Encode(result); err != nil {
 			log.Println("Failed to marshal JSON response: ", err)
