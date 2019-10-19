@@ -29,7 +29,7 @@ type Response struct {
 	Message  string `json:"message,omitempty"`
 	Value    string `json:"value,omitempty"`
 	Error    string `json:"error,omitempty"`
-	Exists   *bool  `json:"doexExist,omitempty"`
+	Exists   *bool  `json:"doesExist,omitempty"`
 	Replaced *bool  `json:"replaced,omitempty"`
 }
 
