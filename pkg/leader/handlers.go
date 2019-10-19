@@ -13,6 +13,7 @@ const (
 	PutSuccess    = "Added successfully"
 	UpdateSuccess = "Updated successfully"
 	GetSuccess    = "Retrieved successfully"
+	DeleteSuccess = "Deleted successfully"
 
 	FailedToParse = "Failed to parse request body"
 	KeyDNE        = "Key does not exist"
@@ -37,6 +38,27 @@ type Response struct {
 type Input struct {
 	Key   string
 	Value string `json:"value"`
+}
+
+func (s *storage) deleteHandler(in Input, res *Response) {
+	if in.Key == "" {
+		res.Error = KeyMissing
+		res.status = http.StatusBadRequest
+		return
+	}
+
+	_, ok := s.store[in.Key]
+	res.Exists = &ok
+
+	s.Delete(in.Key)
+
+	if ok {
+		res.status = 200
+		res.Message = DeleteSuccess
+	} else {
+		res.status = 404
+		res.Error = KeyDNE
+	}
 }
 
 func (s *storage) putHandler(in Input, res *Response) {
@@ -110,4 +132,5 @@ func Route(r *mux.Router) {
 	s := newStorage()
 
 	r.HandleFunc("/kv-store/{key:.*}", withJSON(s.putHandler)).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/{key:.*}", withJSON(s.deleteHandler)).Methods(http.MethodDelete)
 }
