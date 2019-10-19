@@ -2,63 +2,112 @@
 package leader
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/gorilla/mux"
 )
 
 const (
-	HELLO = "Hello, world!"
+	PutSuccess    = "Added successfully"
+	UpdateSuccess = "Updated successfully"
+	GetSuccess    = "Retrieved successfully"
+
+	FailedToParse = "Failed to parse request body"
+	KeyDNE        = "Key does not exist"
+	KeyTooLong    = "Key is too long"
+	ValueMissing  = "Value is missing"
+	KeyMissing    = "Key is missing"
 )
 
-// storage abstracts the volatile kv store for this instance
-type storage struct {
-	store map[string]string
-	m     sync.Mutex
+type Response struct {
+	// The status code is not marshalled to JSON. The wrapper function uses this
+	// to write the HTTP response body. Defaults to 200.
+	status int `json:"-"`
+
+	Message  string `json:"message,omitempty"`
+	Value    string `json:"value,omitempty"`
+	Error    string `json:"error,omitempty"`
+	Exists   *bool  `json:"doesExist,omitempty"`
+	Replaced *bool  `json:"replaced,omitempty"`
 }
 
-func newStorage() *storage {
-	return &storage{
-		store: make(map[string]string),
-		// Note that the zero value for a mutex is unlocked.
+// Input stores arguments to each api request
+type Input struct {
+	Key   string
+	Value string `json:"value"`
+}
+
+func (s *storage) putHandler(in Input, res *Response) {
+	if in.Key == "" {
+		res.Error = KeyMissing
+		res.status = http.StatusBadRequest
+		return
+	}
+
+	if len(in.Key) > 50 {
+		res.Error = KeyTooLong
+		res.status = http.StatusBadRequest
+		return
+	}
+
+	if in.Value == "" {
+		res.Error = ValueMissing
+		res.status = http.StatusBadRequest
+		return
+	}
+
+	replaced := s.Set(in.Key, in.Value)
+
+	res.Replaced = &replaced
+	res.Message = PutSuccess
+	if replaced {
+		res.Message = UpdateSuccess
 	}
 }
 
-// Set sets key=value and returns true iff the value replaced an old value.
-func (s *storage) Set(key, value string) bool {
-	s.m.Lock()
-	defer s.m.Unlock()
+func withJSON(next func(Input, *Response)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 
-	old, updating := s.store[key]
-	s.store[key] = value
+		// Parse input
+		var in Input
+		dec := json.NewDecoder(r.Body)
+		if err := dec.Decode(&in); err != nil {
+			log.Println("Could not decode incoming request: ", err)
+			http.Error(w, FailedToParse, http.StatusBadRequest)
+			return
+		}
 
-	log.Printf("Set %q=%q", key, value)
-	if updating {
-		log.Printf("Old value was %q", old)
+		params := mux.Vars(r)
+		in.Key = params["key"]
+
+		// Process the request and get a result
+		result := &Response{
+			// Default to OK status
+			status: http.StatusOK,
+		}
+		next(in, result)
+
+		// Set header and error text if necessary
+		w.WriteHeader(result.status)
+		if result.status >= 400 && result.Message == "" {
+			result.Message = "Error in " + r.Method
+		}
+		log.Printf("%d %s\n", result.status, result.Message)
+
+		// Encode the result as JSON and send back
+		enc := json.NewEncoder(w)
+		if err := enc.Encode(result); err != nil {
+			log.Println("Failed to marshal JSON response: ", err)
+			// response writer is likely fubar at this point.
+			return
+		}
 	}
-
-	return updating
-}
-
-// Delete removes a key.
-func (s *storage) Delete(key string) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	delete(s.store, key)
-
-	log.Printf("Deleted %q\n", key)
-}
-
-func (s *storage) indexHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(HELLO))
-	s.Set("TODO", HELLO)
 }
 
 func Route(r *mux.Router) {
 	s := newStorage()
 
-	r.HandleFunc("/", s.indexHandler).Methods(http.MethodGet)
+	r.HandleFunc("/kv-store/{key:.*}", withJSON(s.putHandler)).Methods(http.MethodPut)
 }
