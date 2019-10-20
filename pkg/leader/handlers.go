@@ -47,18 +47,17 @@ func (s *storage) deleteHandler(in Input, res *Response) {
 		return
 	}
 
-	_, ok := s.store[in.Key]
+	_, ok := s.Read(in.Key)
 	res.Exists = &ok
 
 	s.Delete(in.Key)
 
-	if ok {
-		res.status = 200
-		res.Message = DeleteSuccess
-	} else {
-		res.status = 404
+	if !ok {
+		res.status = http.StatusNotFound
 		res.Error = KeyDNE
+		return
 	}
+	res.Message = DeleteSuccess
 }
 
 func (s *storage) putHandler(in Input, res *Response) {
