@@ -70,34 +70,31 @@ func (s *storage) putHandler(in Input, res *Response) {
 
 func withJSON(next func(Input, *Response)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		// Parse input
-		var in Input
-		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(&in); err != nil {
-			log.Println("Could not decode incoming request: ", err)
-			http.Error(w, FailedToParse, http.StatusBadRequest)
-			return
-		}
-
-		params := mux.Vars(r)
-		in.Key = params["key"]
-
-		// Process result
 		result := &Response{
 			// Default to OK status
 			status: http.StatusOK,
 		}
 
-		// Check for valid keys before calling the next handler
-		if in.Key == "" {
+		// Parse input. Fetch the key from the URL and parse JSON.
+		// If there is any error parsing the request, skip processing the next
+		// handler.
+		var in Input
+		params := mux.Vars(r)
+		in.Key = params["key"]
+
+		dec := json.NewDecoder(r.Body)
+		if err := dec.Decode(&in); err != nil {
+			log.Println("Could not decode JSON:", err)
+			result.Error = FailedToParse
+			result.status = http.StatusBadRequest
+		} else if in.Key == "" {
 			result.Error = KeyMissing
 			result.status = http.StatusBadRequest
 		} else if len(in.Key) > 50 {
 			result.Error = KeyTooLong
 			result.status = http.StatusBadRequest
 		} else {
-			// Only calling next if the key is good
+			// No errors parsing the request; process it
 			next(in, result)
 		}
 
@@ -105,13 +102,14 @@ func withJSON(next func(Input, *Response)) http.HandlerFunc {
 		w.WriteHeader(result.status)
 		if result.status >= 400 && result.Message == "" {
 			result.Message = "Error in " + r.Method
+			log.Println(result.Error)
 		}
 		log.Printf("%d %s\n", result.status, result.Message)
 
 		// Encode the result as JSON and send back
 		enc := json.NewEncoder(w)
 		if err := enc.Encode(result); err != nil {
-			log.Println("Failed to marshal JSON response: ", err)
+			log.Println("Failed to marshal JSON response:", err)
 			// response writer is likely fubar at this point.
 			return
 		}
