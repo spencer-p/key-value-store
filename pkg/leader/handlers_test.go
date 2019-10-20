@@ -27,7 +27,7 @@ func TestPut(t *testing.T) {
 	r.ServeHTTP(resp, req)
 
 	want := &Response{
-		Message:  "fuck",
+		Message:  PutSuccess,
 		Replaced: ptr.Bool(false),
 	}
 
