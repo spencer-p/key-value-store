@@ -83,44 +83,60 @@ func withJSON(next func(Input, *Response)) http.HandlerFunc {
 			status: http.StatusOK,
 		}
 
-		// Parse input. Fetch the key from the URL and parse JSON.
-		// If there is any error parsing the request, skip processing the next
-		// handler.
+		// Parse input.
 		var in Input
-		params := mux.Vars(r)
-		in.Key = params["key"]
-
-		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(&in); err != nil {
-			log.Println("Could not decode JSON:", err)
-			result.Error = FailedToParse
+		if success, err := parseInput(r, &in); !success {
+			// Failed to process request input -- return error immediately
+			result.Error = err
 			result.status = http.StatusBadRequest
-		} else if in.Key == "" {
-			result.Error = KeyMissing
-			result.status = http.StatusBadRequest
-		} else if len(in.Key) > 50 {
-			result.Error = KeyTooLong
-			result.status = http.StatusBadRequest
-		} else {
-			// No errors parsing the request; process it
-			next(in, result)
-		}
-
-		// Set header and error text if necessary
-		w.WriteHeader(result.status)
-		if result.status >= 400 && result.Message == "" {
-			result.Message = "Error in " + r.Method
-			log.Println(result.Error)
-		}
-		log.Printf("%d %s\n", result.status, result.Message)
-
-		// Encode the result as JSON and send back
-		enc := json.NewEncoder(w)
-		if err := enc.Encode(result); err != nil {
-			log.Println("Failed to marshal JSON response:", err)
-			// response writer is likely fubar at this point.
+			writeResponse(w, r, result)
 			return
 		}
+
+		next(in, result)
+		writeResponse(w, r, result)
+	}
+}
+
+// parseInput fills out a input struct from an http request. Returns ok if it
+// succeeded; otherwise the string contains an error message.
+func parseInput(r *http.Request, in *Input) (ok bool, err string) {
+	params := mux.Vars(r)
+	in.Key = params["key"]
+
+	dec := json.NewDecoder(r.Body)
+	if r.ContentLength > 0 {
+		// Ignore body if there is none
+		if err := dec.Decode(&in); err != nil {
+			log.Println("Could not decode JSON:", err)
+			return false, FailedToParse
+		}
+	}
+
+	if in.Key == "" {
+		return false, KeyMissing
+	} else if len(in.Key) > 50 {
+		return false, KeyTooLong
+	}
+
+	return true, ""
+}
+
+func writeResponse(w http.ResponseWriter, r *http.Request, result *Response) {
+	// Set header and error text if necessary
+	w.WriteHeader(result.status)
+	if result.status >= 400 && result.Message == "" {
+		result.Message = "Error in " + r.Method
+		log.Println(result.Error)
+	}
+	log.Printf("%d %s\n", result.status, result.Message)
+
+	// Encode the result as JSON and send back
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(result); err != nil {
+		log.Println("Failed to marshal JSON response:", err)
+		// response writer is likely fubar at this point.
+		return
 	}
 }
 
