@@ -60,19 +60,20 @@ func (s *storage) deleteHandler(in Input, res *Response) {
 	res.Message = DeleteSuccess
 }
 
+func (s *storage) getHandler(in Input, res *Response) {
+	value, exists := s.Read(in.Key)
+
+	res.Exists = &exists
+	if exists {
+		res.Message = GetSuccess
+		res.Value = value
+	} else {
+		res.Error = KeyDNE
+		res.status = http.StatusNotFound
+	}
+}
+
 func (s *storage) putHandler(in Input, res *Response) {
-	if in.Key == "" {
-		res.Error = KeyMissing
-		res.status = http.StatusBadRequest
-		return
-	}
-
-	if len(in.Key) > 50 {
-		res.Error = KeyTooLong
-		res.status = http.StatusBadRequest
-		return
-	}
-
 	if in.Value == "" {
 		res.Error = ValueMissing
 		res.status = http.StatusBadRequest
@@ -90,40 +91,65 @@ func (s *storage) putHandler(in Input, res *Response) {
 
 func withJSON(next func(Input, *Response)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		// Parse input
-		var in Input
-		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(&in); err != nil {
-			log.Println("Could not decode incoming request: ", err)
-			http.Error(w, FailedToParse, http.StatusBadRequest)
-			return
-		}
-
-		params := mux.Vars(r)
-		in.Key = params["key"]
-
-		// Process the request and get a result
 		result := &Response{
 			// Default to OK status
 			status: http.StatusOK,
 		}
-		next(in, result)
 
-		// Set header and error text if necessary
-		w.WriteHeader(result.status)
-		if result.status >= 400 && result.Message == "" {
-			result.Message = "Error in " + r.Method
-		}
-		log.Printf("%d %s\n", result.status, result.Message)
-
-		// Encode the result as JSON and send back
-		enc := json.NewEncoder(w)
-		if err := enc.Encode(result); err != nil {
-			log.Println("Failed to marshal JSON response: ", err)
-			// response writer is likely fubar at this point.
+		// Parse input.
+		var in Input
+		if success, err := parseInput(r, &in); !success {
+			// Failed to process request input -- return error immediately
+			result.Error = err
+			result.status = http.StatusBadRequest
+			writeResponse(w, r, result)
 			return
 		}
+
+		next(in, result)
+		writeResponse(w, r, result)
+	}
+}
+
+// parseInput fills out a input struct from an http request. Returns ok if it
+// succeeded; otherwise the string contains an error message.
+func parseInput(r *http.Request, in *Input) (ok bool, err string) {
+	params := mux.Vars(r)
+	in.Key = params["key"]
+
+	dec := json.NewDecoder(r.Body)
+	if r.ContentLength > 0 {
+		// Ignore body if there is none
+		if err := dec.Decode(&in); err != nil {
+			log.Println("Could not decode JSON:", err)
+			return false, FailedToParse
+		}
+	}
+
+	if in.Key == "" {
+		return false, KeyMissing
+	} else if len(in.Key) > 50 {
+		return false, KeyTooLong
+	}
+
+	return true, ""
+}
+
+func writeResponse(w http.ResponseWriter, r *http.Request, result *Response) {
+	// Set header and error text if necessary
+	w.WriteHeader(result.status)
+	if result.status >= 400 && result.Message == "" {
+		result.Message = "Error in " + r.Method
+		log.Println(result.Error)
+	}
+	log.Printf("%d %s\n", result.status, result.Message)
+
+	// Encode the result as JSON and send back
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(result); err != nil {
+		log.Println("Failed to marshal JSON response:", err)
+		// response writer is likely fubar at this point.
+		return
 	}
 }
 
@@ -132,4 +158,5 @@ func Route(r *mux.Router) {
 
 	r.HandleFunc("/kv-store/{key:.*}", withJSON(s.putHandler)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/{key:.*}", withJSON(s.deleteHandler)).Methods(http.MethodDelete)
+	r.HandleFunc("/kv-store/{key:.*}", withJSON(s.getHandler)).Methods(http.MethodGet)
 }
