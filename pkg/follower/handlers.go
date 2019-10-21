@@ -12,15 +12,28 @@ import (
 
 // follower holds all state that a follower needs to operate.
 type follower struct {
-	addr string
+	client http.Client
+	addr   *url.URL
 }
 
 func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "My forwarding address is %s", f.addr)
+	// TODO i think use http.NewRequest and f.client.Do
 }
 
 func Route(r *mux.Router, fwd string) {
-	f := follower{fwd}
+	addr, err := url.Parse(fwd)
+	if err != nil {
+		// TODO return an error instead of fataling
+		log.Fatalf("Bad forwarding address %q: %v\n", fwd, addr)
+	}
 
-	r.HandleFunc("/", f.indexHandler).Methods(http.MethodGet)
+	f := follower{
+		client: http.Client{
+			Timeout: TIMEOUT,
+		},
+		addr: addr,
+	}
+
+	r.PathPrefix("/").Handler(http.HandlerFunc(f.indexHandler))
 }
