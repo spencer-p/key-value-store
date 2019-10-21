@@ -3,9 +3,16 @@ package follower
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/gorilla/mux"
+)
+
+const (
+	TIMEOUT = 5 * time.Second
 )
 
 // TODO adam, vineet ?
