@@ -30,7 +30,7 @@ func TestPut(t *testing.T) {
 				Message:  PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
-			wantCode: 200,
+			wantCode: 201,
 		}, {
 			method: "PUT",
 			in: Input{
@@ -52,7 +52,7 @@ func TestPut(t *testing.T) {
 				Message:  PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
-			wantCode: 200,
+			wantCode: 201,
 		}},
 		"bad inputs": {{
 			method: "PUT",
@@ -98,7 +98,7 @@ func TestPut(t *testing.T) {
 				Message:  PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
-			wantCode: 200,
+			wantCode: 201,
 		}, {
 			method: "GET",
 			in: Input{
