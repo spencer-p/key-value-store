@@ -86,7 +86,9 @@ func (s *storage) putHandler(in Input, res *Response) {
 	res.Message = PutSuccess
 	if replaced {
 		res.Message = UpdateSuccess
-	}
+	} else {
+    res.status = http.StatusCreated
+  }
 }
 
 func withJSON(next func(Input, *Response)) http.HandlerFunc {
