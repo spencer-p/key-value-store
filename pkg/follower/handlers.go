@@ -8,9 +8,18 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// TODO adam, vineet ?
+const (
+	SystemOfTheDown = "Main instance is down"
+)
 
+// TODO adam, vineet ?
 // follower holds all state that a follower needs to operate.
+
+type Response struct {
+	status int `json:"-"`
+
+	Message string `json:"message,omitempty"`
+}
 type follower struct {
 	addr string
 }
