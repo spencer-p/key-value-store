@@ -12,11 +12,15 @@ import (
 	"path"
 	"time"
 
+	"github.com/spencer-p/cse138/pkg/types"
+
 	"github.com/gorilla/mux"
 )
 
 const (
 	TIMEOUT = 5 * time.Second
+
+	MainFailure = "Main instance is down"
 )
 
 // follower holds all state that a follower needs to operate.
@@ -51,7 +55,11 @@ func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("Failed to do proxy request:", err)
 		// Presumably the leader is down.
-		http.Error(w, "TODO", http.StatusServiceUnavailable)
+		result := types.Response{
+			Status: http.StatusServiceUnavailable,
+			Error:  MainFailure,
+		}
+		result.Serve(w, request)
 		return
 	}
 
