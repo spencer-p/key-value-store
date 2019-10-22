@@ -27,7 +27,7 @@ type follower struct {
 }
 
 func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "My forwarding address is %s", f.addr)
+	//fmt.Fprintf(w, "My forwarding address is %s", f.addr)
 
 	params := mux.Vars(r)
 
@@ -60,11 +60,16 @@ func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
+
+	s := string(body)
+	fmt.Fprintf(w, s)
+	//dec := json.NewDecoder(resp)
+	//w.WriteHeader(s)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	log.Println(string(body))
+	//log.Println("Follow received" + string(body))
 
 	// TODO i think use http.NewRequest and f.client.Do
 }
