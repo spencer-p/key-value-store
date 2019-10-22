@@ -3,13 +3,13 @@ package follower
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"time"
-  "io/ioutil"
-  //"encoding/json"
-  "bytes"
+	//"encoding/json"
+	"bytes"
 
 	"github.com/gorilla/mux"
 )
@@ -29,42 +29,42 @@ type follower struct {
 func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "My forwarding address is %s", f.addr)
 
-  requestBody, err := ioutil.ReadAll(r.Body)
-  if err != nil {
-    log.Println("error")
-    return
-  }
+	requestBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Println("error")
+		return
+	}
 
-  r.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
+	r.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
 
-  request, err := http.NewRequest(r.Method, "http://" + f.addr.String() + "/kv-store/{key:.*}", bytes.NewBuffer(requestBody))
+	request, err := http.NewRequest(r.Method, "http://"+f.addr.String()+"/kv-store/"+r.FormValue(""), bytes.NewBuffer(requestBody))
 
-  if err != nil {
-    log.Fatalln(err)
-  }
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-  request.Header = make(http.Header)
+	request.Header = make(http.Header)
 
-  for key, value := range r.Header {
-      request.Header[key] = value
-  }
+	for key, value := range r.Header {
+		request.Header[key] = value
+	}
 
-  resp, err := f.client.Do(request)
+	resp, err := f.client.Do(request)
 
-  if err != nil {
-    log.Fatalln(err)
-  }
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-  defer resp.Body.Close()
+	defer resp.Body.Close()
 
-  body, err := ioutil.ReadAll(resp.Body)
-  if err != nil {
-    log.Fatalln(err)
-  }
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-  log.Println(string(body))
+	log.Println(string(body))
 
-  // TODO i think use http.NewRequest and f.client.Do
+	// TODO i think use http.NewRequest and f.client.Do
 }
 
 func Route(r *mux.Router, fwd string) {
