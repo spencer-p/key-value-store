@@ -66,6 +66,8 @@ func (s *storage) putHandler(in types.Input, res *types.Response) {
 	res.Message = PutSuccess
 	if replaced {
 		res.Message = UpdateSuccess
+	} else {
+		res.Status = http.StatusCreated
 	}
 }
 
