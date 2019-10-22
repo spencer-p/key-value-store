@@ -29,6 +29,8 @@ type follower struct {
 func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "My forwarding address is %s", f.addr)
 
+	params := mux.Vars(r)
+
 	requestBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Println("error")
@@ -37,7 +39,7 @@ func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
 
-	request, err := http.NewRequest(r.Method, "http://"+f.addr.String()+"/kv-store/"+r.FormValue(""), bytes.NewBuffer(requestBody))
+	request, err := http.NewRequest(r.Method, "http://"+f.addr.String()+"/kv-store/"+params["key"], bytes.NewBuffer(requestBody))
 
 	if err != nil {
 		log.Fatalln(err)
@@ -81,5 +83,5 @@ func Route(r *mux.Router, fwd string) {
 		addr: addr,
 	}
 
-	r.PathPrefix("/").Handler(http.HandlerFunc(f.indexHandler))
+	r.PathPrefix("/kv-store/{key:.*}").Handler(http.HandlerFunc(f.indexHandler))
 }
