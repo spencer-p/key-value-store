@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/types"
@@ -68,6 +69,10 @@ func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Route(r *mux.Router, fwd string) error {
+	if !strings.HasPrefix(fwd, "http://") {
+		fwd = "http://" + fwd
+	}
+
 	addr, err := url.Parse(fwd)
 	if err != nil {
 		return fmt.Errorf("Bad forwarding address %q: %v\n", fwd, addr)
