@@ -15,9 +15,11 @@ const (
 	GetSuccess    = "Retrieved successfully"
 	DeleteSuccess = "Deleted successfully"
 
-	KeyDNE       = "Key does not exist"
-	ValueMissing = "Value is missing"
-	KeyMissing   = "Key is missing"
+	FailedToParse = "Failed to parse request body"
+	KeyMissing    = "Key is missing"
+	KeyDNE        = "Key does not exist"
+	KeyTooLong    = "Key is too long"
+	ValueMissing  = "Value is missing"
 )
 
 func (s *storage) deleteHandler(in types.Input, res *types.Response) {
