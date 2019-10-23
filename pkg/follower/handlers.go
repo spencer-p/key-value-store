@@ -19,7 +19,9 @@ import (
 )
 
 const (
-	TIMEOUT = 5 * time.Second
+	// This has to be shorter than the http server read/write timeout so that we
+	// don't get preempted by the http server dispatcher.
+	CLIENT_TIMEOUT = 2 * time.Second
 
 	MainFailure = "Main instance is down"
 )
@@ -80,7 +82,7 @@ func Route(r *mux.Router, fwd string) error {
 
 	f := follower{
 		client: http.Client{
-			Timeout: TIMEOUT,
+			Timeout: CLIENT_TIMEOUT,
 		},
 		addr: addr,
 	}
