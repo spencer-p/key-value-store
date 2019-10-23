@@ -1,4 +1,4 @@
 vramared	TODO
 haskari	TODO
 wasper	TODO
-spjpeter	TODO
+spjpeter	I wrote infrastructure (architecture, middleware and the storage structure), part of the PUT handler, part of the forwarding handler, and tests.
