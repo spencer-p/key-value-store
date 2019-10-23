@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/spencer-p/cse138/pkg/ptr"
+	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/gorilla/mux"
@@ -16,73 +17,73 @@ import (
 func TestPut(t *testing.T) {
 	tests := map[string][]struct {
 		method   string
-		in       Input
-		want     Response
+		in       types.Input
+		want     types.Response
 		wantCode int
 	}{
 		"repeated PUT requests": {{
 			method: "PUT",
-			in: Input{
+			in: types.Input{
 				Key:   "mykey",
 				Value: "myvalue",
 			},
-			want: Response{
+			want: types.Response{
 				Message:  PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
-			wantCode: 200,
+			wantCode: 201,
 		}, {
 			method: "PUT",
-			in: Input{
+			in: types.Input{
 				Key:   "mykey",
 				Value: "value2",
 			},
-			want: Response{
+			want: types.Response{
 				Message:  UpdateSuccess,
 				Replaced: ptr.Bool(true),
 			},
 			wantCode: 200,
 		}, {
 			method: "PUT",
-			in: Input{
+			in: types.Input{
 				Key:   "a-new-key",
 				Value: "myvalue",
 			},
-			want: Response{
+			want: types.Response{
 				Message:  PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
-			wantCode: 200,
+			wantCode: 201,
 		}},
 		"bad inputs": {{
 			method: "PUT",
-			in: Input{
+			in: types.Input{
 				Key:   "12345678901234567890123456789012345679012345678901234567890",
 				Value: "myvalue",
 			},
-			want: Response{
+			want: types.Response{
 				Error:   KeyTooLong,
 				Message: "Error in PUT",
 			},
 			wantCode: 400,
 		}, {
 			method: "PUT",
-			in: Input{
+			in: types.Input{
 				Key:   "",
 				Value: "myvalue",
 			},
-			want: Response{
+			want: types.Response{
 				Error:   KeyMissing,
 				Message: "Error in PUT",
 			},
 			wantCode: 400,
 		}, {
 			method: "PUT",
-			in: Input{
+			in: types.Input{
 				Key:   "abc",
 				Value: "",
 			},
-			want: Response{
+			want: types.Response{
 				Error:   ValueMissing,
 				Message: "Error in PUT",
 			},
@@ -90,21 +91,21 @@ func TestPut(t *testing.T) {
 		}},
 		"canonical example": {{
 			method: "PUT",
-			in: Input{
+			in: types.Input{
 				Key:   "x",
 				Value: "1",
 			},
-			want: Response{
+			want: types.Response{
 				Message:  PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
-			wantCode: 200,
+			wantCode: 201,
 		}, {
 			method: "GET",
-			in: Input{
+			in: types.Input{
 				Key: "y",
 			},
-			want: Response{
+			want: types.Response{
 				Error:   KeyDNE,
 				Message: "Error in GET",
 				Exists:  ptr.Bool(false),
@@ -112,10 +113,10 @@ func TestPut(t *testing.T) {
 			wantCode: 404,
 		}, {
 			method: "GET",
-			in: Input{
+			in: types.Input{
 				Key: "x",
 			},
-			want: Response{
+			want: types.Response{
 				Message: GetSuccess,
 				Value:   "1",
 				Exists:  ptr.Bool(true),
@@ -123,21 +124,21 @@ func TestPut(t *testing.T) {
 			wantCode: 200,
 		}, {
 			method: "PUT",
-			in: Input{
+			in: types.Input{
 				Key:   "x",
 				Value: "2",
 			},
-			want: Response{
+			want: types.Response{
 				Message:  UpdateSuccess,
 				Replaced: ptr.Bool(true),
 			},
 			wantCode: 200,
 		}, {
 			method: "GET",
-			in: Input{
+			in: types.Input{
 				Key: "x",
 			},
-			want: Response{
+			want: types.Response{
 				Message: GetSuccess,
 				Value:   "2",
 				Exists:  ptr.Bool(true),
@@ -145,20 +146,20 @@ func TestPut(t *testing.T) {
 			wantCode: 200,
 		}, {
 			method: "DELETE",
-			in: Input{
+			in: types.Input{
 				Key: "x",
 			},
-			want: Response{
+			want: types.Response{
 				Message: DeleteSuccess,
 				Exists:  ptr.Bool(true),
 			},
 			wantCode: 200,
 		}, {
 			method: "GET",
-			in: Input{
+			in: types.Input{
 				Key: "x",
 			},
-			want: Response{
+			want: types.Response{
 				Error:   KeyDNE,
 				Message: "Error in GET",
 				Exists:  ptr.Bool(false),
@@ -186,13 +187,12 @@ func TestPut(t *testing.T) {
 
 					r.ServeHTTP(resp, req)
 
-					var got Response
+					var got types.Response
 					if err := json.Unmarshal(resp.Body.Bytes(), &got); err != nil {
 						t.Errorf("Failed to parse response: %v", err)
 					}
 
-					if diff := cmp.Diff(&got, &test.want,
-						cmp.AllowUnexported(Response{})); diff != "" {
+					if diff := cmp.Diff(&got, &test.want); diff != "" {
 						t.Errorf("Got bad body (-got, +want): %s", diff)
 					}
 

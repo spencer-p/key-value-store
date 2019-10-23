@@ -44,7 +44,10 @@ func main() {
 		leader.Route(r)
 	} else {
 		log.Println("Configured as a follower")
-		follower.Route(r, env.ForwardingAddr)
+		err := follower.Route(r, env.ForwardingAddr)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	srv := &http.Server{
