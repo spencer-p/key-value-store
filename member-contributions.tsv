@@ -1,4 +1,4 @@
 vramared	I wrote the DELETE request handler, part of the PUT handler, and part of the follower code.
 haskari	I wrote some of the kv-handler, helped with parsing the json, the GET handler, part of the follower code.
-wasper  I got up to speed with Go, worked in part of the follower code, and routing of the forwarding handler.
+wasper	I got up to speed with Go, worked in part of the follower code, and routing of the forwarding handler.
 spjpeter	I wrote infrastructure (architecture, middleware and the storage structure), part of the PUT handler, part of the forwarding handler, and tests.
