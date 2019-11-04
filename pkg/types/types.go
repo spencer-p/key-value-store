@@ -19,17 +19,31 @@ type Response struct {
 	// to write the HTTP response body. Defaults to 200.
 	Status int `json:"-"`
 
+	// Standard information for key value storing
 	Message  string `json:"message,omitempty"`
 	Value    string `json:"value,omitempty"`
 	Error    string `json:"error,omitempty"`
 	Exists   *bool  `json:"doesExist,omitempty"`
 	Replaced *bool  `json:"replaced,omitempty"`
+
+	// Info about the state of shards
+	Shards   []Shard `json:"shards,omitempty"`
+	KeyCount *int    `json:"key-count,omitempty"`
+
+	// Potential forwarding metadata
+	Address string `json:"address,omitempty"`
+}
+
+type Shard struct {
+	Address  string `json:"address"`
+	KeyCount int    `json:"key-count"`
 }
 
 // Input stores arguments to each api request
 type Input struct {
 	Key   string
-	Value string `json:"value"`
+	Value string   `json:"value"`
+	View  []string `json:"view"`
 }
 
 // WrapHTTP wraps an method that processes Inputs and writes a Response as an http
