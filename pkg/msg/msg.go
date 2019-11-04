@@ -1,10 +1,6 @@
 package msg
 
 const (
-	FailedToParse = "Failed to parse request body"
-	KeyMissing    = "Key is missing"
-	KeyTooLong    = "Key is too long"
-
 	MainFailure = "Main instance is down"
 
 	PutSuccess    = "Added successfully"
