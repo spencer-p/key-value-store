@@ -1,5 +1,5 @@
 // Package leader implements handlers for follower instances.
-package follower
+package handlers
 
 import (
 	"bytes"
@@ -70,7 +70,7 @@ func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, resp.Body)
 }
 
-func Route(r *mux.Router, fwd string) error {
+func RouteFollower(r *mux.Router, fwd string) error {
 	if !strings.HasPrefix(fwd, "http://") {
 		fwd = "http://" + fwd
 	}

@@ -1,5 +1,5 @@
 // Package leader implements all behavior specific to a leader instance.
-package leader
+package handlers
 
 import (
 	"net/http"

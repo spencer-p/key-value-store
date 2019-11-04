@@ -10,8 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spencer-p/cse138/pkg/follower"
-	"github.com/spencer-p/cse138/pkg/leader"
+	"github.com/spencer-p/cse138/pkg/handlers"
 	"github.com/spencer-p/cse138/pkg/util"
 
 	"github.com/gorilla/mux"
@@ -25,10 +24,6 @@ const (
 type Config struct {
 	// Port to serve HTTP on
 	Port string `envconfig:"PORT" required:"true"`
-
-	// If empty, this is the main instance.
-	// Otherwise, act as a proxy to the address provided.
-	ForwardingAddr string `envconfig:"FORWARDING_ADDRESS"`
 }
 
 func main() {
@@ -39,16 +34,7 @@ func main() {
 	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	if env.ForwardingAddr == "" {
-		log.Println("Configured as a main instance")
-		leader.Route(r)
-	} else {
-		log.Println("Configured as a follower")
-		err := follower.Route(r, env.ForwardingAddr)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+	handlers.Route(r)
 
 	srv := &http.Server{
 		Handler:      r,
