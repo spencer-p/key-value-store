@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/gorilla/mux"
@@ -22,8 +23,6 @@ const (
 	// This has to be shorter than the http server read/write timeout so that we
 	// don't get preempted by the http server dispatcher.
 	CLIENT_TIMEOUT = 2 * time.Second
-
-	MainFailure = "Main instance is down"
 )
 
 // follower holds all state that a follower needs to operate.
@@ -60,7 +59,7 @@ func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 		// Presumably the leader is down.
 		result := types.Response{
 			Status: http.StatusServiceUnavailable,
-			Error:  MainFailure,
+			Error:  msg.MainFailure,
 		}
 		result.Serve(w, request)
 		return
