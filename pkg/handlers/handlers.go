@@ -5,22 +5,27 @@ import (
 	"net/http"
 
 	"github.com/spencer-p/cse138/pkg/msg"
+	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/gorilla/mux"
 )
 
-func (s *storage) deleteHandler(in types.Input, res *types.Response) {
+type State struct {
+	store *store.Store
+}
+
+func (s *State) deleteHandler(in types.Input, res *types.Response) {
 	if in.Key == "" {
 		res.Error = msg.KeyMissing
 		res.Status = http.StatusBadRequest
 		return
 	}
 
-	_, ok := s.Read(in.Key)
+	_, ok := s.store.Read(in.Key)
 	res.Exists = &ok
 
-	s.Delete(in.Key)
+	s.store.Delete(in.Key)
 
 	if !ok {
 		res.Status = http.StatusNotFound
@@ -30,8 +35,8 @@ func (s *storage) deleteHandler(in types.Input, res *types.Response) {
 	res.Message = msg.DeleteSuccess
 }
 
-func (s *storage) getHandler(in types.Input, res *types.Response) {
-	value, exists := s.Read(in.Key)
+func (s *State) getHandler(in types.Input, res *types.Response) {
+	value, exists := s.store.Read(in.Key)
 
 	res.Exists = &exists
 	if exists {
@@ -43,14 +48,14 @@ func (s *storage) getHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func (s *storage) putHandler(in types.Input, res *types.Response) {
+func (s *State) putHandler(in types.Input, res *types.Response) {
 	if in.Value == "" {
 		res.Error = msg.ValueMissing
 		res.Status = http.StatusBadRequest
 		return
 	}
 
-	replaced := s.Set(in.Key, in.Value)
+	replaced := s.store.Set(in.Key, in.Value)
 
 	res.Replaced = &replaced
 	res.Message = msg.PutSuccess
@@ -62,7 +67,9 @@ func (s *storage) putHandler(in types.Input, res *types.Response) {
 }
 
 func Route(r *mux.Router) {
-	s := newStorage()
+	s := State{
+		store: store.New(),
+	}
 
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
