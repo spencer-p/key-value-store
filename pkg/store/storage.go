@@ -1,25 +1,26 @@
-package handlers
+package store
 
 import (
 	"log"
 	"sync"
 )
 
-// storage abstracts the volatile kv store for this instance
-type storage struct {
+// Store represents a volatile key value store.
+type Store struct {
 	store map[string]string
 	m     sync.RWMutex
 }
 
-func newStorage() *storage {
-	return &storage{
+// New constructs an empty store.
+func New() *Store {
+	return &Store{
 		store: make(map[string]string),
 		// Note that the zero value for a mutex is unlocked.
 	}
 }
 
 // Set sets key=value and returns true iff the value replaced an old value.
-func (s *storage) Set(key, value string) bool {
+func (s *Store) Set(key, value string) bool {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -35,7 +36,7 @@ func (s *storage) Set(key, value string) bool {
 }
 
 // Delete removes a key.
-func (s *storage) Delete(key string) {
+func (s *Store) Delete(key string) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -44,8 +45,8 @@ func (s *storage) Delete(key string) {
 	log.Printf("Deleted %q\n", key)
 }
 
-// Read returns the value for a key in the storage.
-func (s *storage) Read(key string) (string, bool) {
+// Read returns the value for a key in the Store.
+func (s *Store) Read(key string) (string, bool) {
 	s.m.RLock()
 	defer s.m.RUnlock()
 
@@ -54,4 +55,12 @@ func (s *storage) Read(key string) (string, bool) {
 	log.Printf("Reading %q=%q\n", key, value)
 
 	return value, ok
+}
+
+// NumKeys returns the number of keys in the store.
+func (s *Store) NumKeys() int {
+	s.m.RLock()
+	defer s.m.RUnlock()
+
+	return len(s.store)
 }
