@@ -15,6 +15,19 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func kv(key, value string) types.Input {
+	return types.Input{Entry: types.Entry{
+		Key:   key,
+		Value: value,
+	}}
+}
+
+func k(key string) types.Input {
+	return types.Input{Entry: types.Entry{
+		Key: key,
+	}}
+}
+
 func TestPut(t *testing.T) {
 	tests := map[string][]struct {
 		method   string
@@ -24,10 +37,7 @@ func TestPut(t *testing.T) {
 	}{
 		"repeated PUT requests": {{
 			method: "PUT",
-			in: types.Input{
-				Key:   "mykey",
-				Value: "myvalue",
-			},
+			in:     kv("mykey", "myvalue"),
 			want: types.Response{
 				Message:  msg.PutSuccess,
 				Replaced: ptr.Bool(false),
@@ -35,10 +45,7 @@ func TestPut(t *testing.T) {
 			wantCode: 201,
 		}, {
 			method: "PUT",
-			in: types.Input{
-				Key:   "mykey",
-				Value: "value2",
-			},
+			in:     kv("mykey", "value2"),
 			want: types.Response{
 				Message:  msg.UpdateSuccess,
 				Replaced: ptr.Bool(true),
@@ -46,10 +53,7 @@ func TestPut(t *testing.T) {
 			wantCode: 200,
 		}, {
 			method: "PUT",
-			in: types.Input{
-				Key:   "a-new-key",
-				Value: "myvalue",
-			},
+			in:     kv("a-new-key", "myvalue"),
 			want: types.Response{
 				Message:  msg.PutSuccess,
 				Replaced: ptr.Bool(false),
@@ -58,10 +62,7 @@ func TestPut(t *testing.T) {
 		}},
 		"bad inputs": {{
 			method: "PUT",
-			in: types.Input{
-				Key:   "12345678901234567890123456789012345679012345678901234567890",
-				Value: "myvalue",
-			},
+			in:     kv("12345678901234567890123456789012345679012345678901234567890", "myvalue"),
 			want: types.Response{
 				Error:   msg.KeyTooLong,
 				Message: "Error in PUT",
@@ -69,10 +70,7 @@ func TestPut(t *testing.T) {
 			wantCode: 400,
 		}, {
 			method: "PUT",
-			in: types.Input{
-				Key:   "",
-				Value: "myvalue",
-			},
+			in:     kv("", "myvalue"),
 			want: types.Response{
 				Error:   msg.KeyMissing,
 				Message: "Error in PUT",
@@ -80,10 +78,7 @@ func TestPut(t *testing.T) {
 			wantCode: 400,
 		}, {
 			method: "PUT",
-			in: types.Input{
-				Key:   "abc",
-				Value: "",
-			},
+			in:     kv("abc", ""),
 			want: types.Response{
 				Error:   msg.ValueMissing,
 				Message: "Error in PUT",
@@ -92,10 +87,7 @@ func TestPut(t *testing.T) {
 		}},
 		"canonical example": {{
 			method: "PUT",
-			in: types.Input{
-				Key:   "x",
-				Value: "1",
-			},
+			in:     kv("x", "1"),
 			want: types.Response{
 				Message:  msg.PutSuccess,
 				Replaced: ptr.Bool(false),
@@ -103,9 +95,7 @@ func TestPut(t *testing.T) {
 			wantCode: 201,
 		}, {
 			method: "GET",
-			in: types.Input{
-				Key: "y",
-			},
+			in:     k("y"),
 			want: types.Response{
 				Error:   msg.KeyDNE,
 				Message: "Error in GET",
@@ -114,9 +104,7 @@ func TestPut(t *testing.T) {
 			wantCode: 404,
 		}, {
 			method: "GET",
-			in: types.Input{
-				Key: "x",
-			},
+			in:     k("x"),
 			want: types.Response{
 				Message: msg.GetSuccess,
 				Value:   "1",
@@ -125,10 +113,7 @@ func TestPut(t *testing.T) {
 			wantCode: 200,
 		}, {
 			method: "PUT",
-			in: types.Input{
-				Key:   "x",
-				Value: "2",
-			},
+			in:     kv("x", "2"),
 			want: types.Response{
 				Message:  msg.UpdateSuccess,
 				Replaced: ptr.Bool(true),
@@ -136,9 +121,7 @@ func TestPut(t *testing.T) {
 			wantCode: 200,
 		}, {
 			method: "GET",
-			in: types.Input{
-				Key: "x",
-			},
+			in:     k("x"),
 			want: types.Response{
 				Message: msg.GetSuccess,
 				Value:   "2",
@@ -147,9 +130,7 @@ func TestPut(t *testing.T) {
 			wantCode: 200,
 		}, {
 			method: "DELETE",
-			in: types.Input{
-				Key: "x",
-			},
+			in:     k("x"),
 			want: types.Response{
 				Message: msg.DeleteSuccess,
 				Exists:  ptr.Bool(true),
@@ -157,9 +138,7 @@ func TestPut(t *testing.T) {
 			wantCode: 200,
 		}, {
 			method: "GET",
-			in: types.Input{
-				Key: "x",
-			},
+			in:     k("x"),
 			want: types.Response{
 				Error:   msg.KeyDNE,
 				Message: "Error in GET",
