@@ -6,12 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-)
 
-const (
-	FailedToParse = "Failed to parse request body"
-	KeyMissing    = "Key is missing"
-	KeyTooLong    = "Key is too long"
+	"github.com/spencer-p/cse138/pkg/msg"
 )
 
 type Response struct {
@@ -81,14 +77,14 @@ func ParseInput(r *http.Request, in *Input) (ok bool, err string) {
 		// Ignore body if there is none
 		if err := dec.Decode(&in); err != nil {
 			log.Println("Could not decode JSON:", err)
-			return false, FailedToParse
+			return false, msg.FailedToParse
 		}
 	}
 
 	if in.Key == "" {
-		return false, KeyMissing
+		return false, msg.KeyMissing
 	} else if len(in.Key) > 50 {
-		return false, KeyTooLong
+		return false, msg.KeyTooLong
 	}
 
 	return true, ""

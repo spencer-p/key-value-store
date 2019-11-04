@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/ptr"
 	"github.com/spencer-p/cse138/pkg/types"
 
@@ -28,7 +29,7 @@ func TestPut(t *testing.T) {
 				Value: "myvalue",
 			},
 			want: types.Response{
-				Message:  PutSuccess,
+				Message:  msg.PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
 			wantCode: 201,
@@ -39,7 +40,7 @@ func TestPut(t *testing.T) {
 				Value: "value2",
 			},
 			want: types.Response{
-				Message:  UpdateSuccess,
+				Message:  msg.UpdateSuccess,
 				Replaced: ptr.Bool(true),
 			},
 			wantCode: 200,
@@ -50,7 +51,7 @@ func TestPut(t *testing.T) {
 				Value: "myvalue",
 			},
 			want: types.Response{
-				Message:  PutSuccess,
+				Message:  msg.PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
 			wantCode: 201,
@@ -62,7 +63,7 @@ func TestPut(t *testing.T) {
 				Value: "myvalue",
 			},
 			want: types.Response{
-				Error:   KeyTooLong,
+				Error:   msg.KeyTooLong,
 				Message: "Error in PUT",
 			},
 			wantCode: 400,
@@ -73,7 +74,7 @@ func TestPut(t *testing.T) {
 				Value: "myvalue",
 			},
 			want: types.Response{
-				Error:   KeyMissing,
+				Error:   msg.KeyMissing,
 				Message: "Error in PUT",
 			},
 			wantCode: 400,
@@ -84,7 +85,7 @@ func TestPut(t *testing.T) {
 				Value: "",
 			},
 			want: types.Response{
-				Error:   ValueMissing,
+				Error:   msg.ValueMissing,
 				Message: "Error in PUT",
 			},
 			wantCode: 400,
@@ -96,7 +97,7 @@ func TestPut(t *testing.T) {
 				Value: "1",
 			},
 			want: types.Response{
-				Message:  PutSuccess,
+				Message:  msg.PutSuccess,
 				Replaced: ptr.Bool(false),
 			},
 			wantCode: 201,
@@ -106,7 +107,7 @@ func TestPut(t *testing.T) {
 				Key: "y",
 			},
 			want: types.Response{
-				Error:   KeyDNE,
+				Error:   msg.KeyDNE,
 				Message: "Error in GET",
 				Exists:  ptr.Bool(false),
 			},
@@ -117,7 +118,7 @@ func TestPut(t *testing.T) {
 				Key: "x",
 			},
 			want: types.Response{
-				Message: GetSuccess,
+				Message: msg.GetSuccess,
 				Value:   "1",
 				Exists:  ptr.Bool(true),
 			},
@@ -129,7 +130,7 @@ func TestPut(t *testing.T) {
 				Value: "2",
 			},
 			want: types.Response{
-				Message:  UpdateSuccess,
+				Message:  msg.UpdateSuccess,
 				Replaced: ptr.Bool(true),
 			},
 			wantCode: 200,
@@ -139,7 +140,7 @@ func TestPut(t *testing.T) {
 				Key: "x",
 			},
 			want: types.Response{
-				Message: GetSuccess,
+				Message: msg.GetSuccess,
 				Value:   "2",
 				Exists:  ptr.Bool(true),
 			},
@@ -150,7 +151,7 @@ func TestPut(t *testing.T) {
 				Key: "x",
 			},
 			want: types.Response{
-				Message: DeleteSuccess,
+				Message: msg.DeleteSuccess,
 				Exists:  ptr.Bool(true),
 			},
 			wantCode: 200,
@@ -160,7 +161,7 @@ func TestPut(t *testing.T) {
 				Key: "x",
 			},
 			want: types.Response{
-				Error:   KeyDNE,
+				Error:   msg.KeyDNE,
 				Message: "Error in GET",
 				Exists:  ptr.Bool(false),
 			},

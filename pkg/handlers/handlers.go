@@ -4,27 +4,15 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/gorilla/mux"
 )
 
-const (
-	PutSuccess    = "Added successfully"
-	UpdateSuccess = "Updated successfully"
-	GetSuccess    = "Retrieved successfully"
-	DeleteSuccess = "Deleted successfully"
-
-	FailedToParse = "Failed to parse request body"
-	KeyMissing    = "Key is missing"
-	KeyDNE        = "Key does not exist"
-	KeyTooLong    = "Key is too long"
-	ValueMissing  = "Value is missing"
-)
-
 func (s *storage) deleteHandler(in types.Input, res *types.Response) {
 	if in.Key == "" {
-		res.Error = KeyMissing
+		res.Error = msg.KeyMissing
 		res.Status = http.StatusBadRequest
 		return
 	}
@@ -36,10 +24,10 @@ func (s *storage) deleteHandler(in types.Input, res *types.Response) {
 
 	if !ok {
 		res.Status = http.StatusNotFound
-		res.Error = KeyDNE
+		res.Error = msg.KeyDNE
 		return
 	}
-	res.Message = DeleteSuccess
+	res.Message = msg.DeleteSuccess
 }
 
 func (s *storage) getHandler(in types.Input, res *types.Response) {
@@ -47,17 +35,17 @@ func (s *storage) getHandler(in types.Input, res *types.Response) {
 
 	res.Exists = &exists
 	if exists {
-		res.Message = GetSuccess
+		res.Message = msg.GetSuccess
 		res.Value = value
 	} else {
-		res.Error = KeyDNE
+		res.Error = msg.KeyDNE
 		res.Status = http.StatusNotFound
 	}
 }
 
 func (s *storage) putHandler(in types.Input, res *types.Response) {
 	if in.Value == "" {
-		res.Error = ValueMissing
+		res.Error = msg.ValueMissing
 		res.Status = http.StatusBadRequest
 		return
 	}
@@ -65,9 +53,9 @@ func (s *storage) putHandler(in types.Input, res *types.Response) {
 	replaced := s.Set(in.Key, in.Value)
 
 	res.Replaced = &replaced
-	res.Message = PutSuccess
+	res.Message = msg.PutSuccess
 	if replaced {
-		res.Message = UpdateSuccess
+		res.Message = msg.UpdateSuccess
 	} else {
 		res.Status = http.StatusCreated
 	}
