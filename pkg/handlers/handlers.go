@@ -3,7 +3,7 @@ package handlers
 
 import (
 	"net/http"
-  "stathat.com/c/consistent"
+	"stathat.com/c/consistent"
 
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
@@ -14,8 +14,8 @@ import (
 
 type State struct {
 	store *store.Store
-  c *consistent.Consistent
-  //String address
+	c     *consistent.Consistent
+	//String address
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -72,8 +72,8 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 func Route(r *mux.Router) {
 	s := State{
 		store: store.New(),
-    c : consistent.New(),
-    //address := 
+		c:     consistent.New(),
+		//address :=
 	}
 
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
