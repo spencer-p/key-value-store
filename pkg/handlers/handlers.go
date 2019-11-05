@@ -9,10 +9,13 @@ import (
 	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/gorilla/mux"
+	"stathat.com/c/consistent"
 )
 
 type State struct {
 	store *store.Store
+	c     *consistent.Consistent
+	//String address
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -69,7 +72,12 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 func Route(r *mux.Router) {
 	s := State{
 		store: store.New(),
+		c:     consistent.New(),
+		//address :=
 	}
+
+	// TODO Route needs to be passed the address and initial view
+	// The view should be set in the consistent hash here.
 
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
