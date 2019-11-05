@@ -13,7 +13,6 @@ import (
 
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
-
 )
 
 const (
@@ -28,7 +27,7 @@ type forwarder struct {
 	addr   *url.URL
 }
 
-func (f* forwarder) forwardMessage(w http.ResponseWriter, r *http.Request) {
+func (f *forwarder) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	requestBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Println("Failed to read body:", err)

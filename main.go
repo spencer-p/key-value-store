@@ -23,8 +23,8 @@ const (
 
 type Config struct {
 	// Port to serve HTTP on
-	Port string `envconfig:"PORT" required:"true"`
-  Address string `envconfig:"ADDRESS" required:"true"`
+	Port    string `envconfig:"PORT" required:"true"`
+	Address string `envconfig:"ADDRESS" required:"true"`
 }
 
 func main() {

@@ -2,24 +2,24 @@
 package handlers
 
 import (
-	"net/http"
-  "log"
-	"net/url"
 	"fmt"
+	"log"
+	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 
-	"stathat.com/c/consistent"
 	"github.com/gorilla/mux"
+	"stathat.com/c/consistent"
 )
 
 type State struct {
-	store *store.Store
-	c     *consistent.Consistent
-  address string
+	store   *store.Store
+	hash    *consistent.Consistent
+	address string
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -74,27 +74,28 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
-  key := mux.Vars(r)["Key"]
-  log.Println("key " + key);
+	// TODO: get the key in this function
+	key := mux.Vars(r)["Key"]
+	log.Println("key " + key)
 
-  hashedAddress, err := s.c.Get(key)
+	hashedAddress, err := s.hash.Get(key)
 
-  if err != nil {
-    log.Fatal(err)
-  }
+	if err != nil {
+		log.Fatal(err)
+	}
 
-  log.Println("hashed address: " + hashedAddress);
-  if ( hashedAddress != s.address ) {
-    return true
-  }
-  return false
+	log.Println("hashed address: " + hashedAddress)
+	if hashedAddress != s.address {
+		return true
+	}
+	return false
 }
 
 func Route(r *mux.Router, address string) error {
 	s := State{
-		store: store.New(),
-		c:     consistent.New(),
-		address : address,
+		store:   store.New(),
+		hash:    consistent.New(),
+		address: address,
 	}
 
 	// TODO Route needs to be passed the address and initial view
@@ -109,7 +110,7 @@ func Route(r *mux.Router, address string) error {
 		return fmt.Errorf("Bad forwarding address %q: %v\n", address, addr)
 	}
 
-  // Only necessary if we need to forward
+	// Only necessary if we need to forward
 	f := forwarder{
 		client: http.Client{
 			Timeout: CLIENT_TIMEOUT,
@@ -118,10 +119,9 @@ func Route(r *mux.Router, address string) error {
 	}
 
 	r.HandleFunc("/kv-store/{key:.*}", f.forwardMessage).MatcherFunc(s.shouldForward)
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)
 
-  return nil
+	return nil
 }
-
