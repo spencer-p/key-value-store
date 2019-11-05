@@ -97,7 +97,9 @@ func Route(r *mux.Router, address string) error {
 		address : address,
 	}
 
-<<<<<<< HEAD
+	// TODO Route needs to be passed the address and initial view
+	// The view should be set in the consistent hash here.
+
 	if !strings.HasPrefix(address, "http://") {
 		address = "http://" + address
 	}
@@ -116,11 +118,6 @@ func Route(r *mux.Router, address string) error {
 	}
 
 	r.HandleFunc("/kv-store/{key:.*}", f.forwardMessage).MatcherFunc(s.shouldForward)
-=======
-	// TODO Route needs to be passed the address and initial view
-	// The view should be set in the consistent hash here.
-
->>>>>>> 6b8db7f6a973f1e8988d8b27ba22c40dfe2a154b
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)
