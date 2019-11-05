@@ -37,9 +37,17 @@ type Shard struct {
 
 // Input stores arguments to each api request
 type Input struct {
-	Key   string
-	Value string   `json:"value"`
+	Entry `json:",inline"`
+
+	// A View and Batch is only used for view change requests.
 	View  []string `json:"view"`
+	Batch []Entry  `json:"diff"`
+}
+
+// An Entry is a key value pair.
+type Entry struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 // WrapHTTP wraps an method that processes Inputs and writes a Response as an http
