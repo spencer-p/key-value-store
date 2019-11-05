@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-  "stathat.com/c/consistent"
 
 	"github.com/spencer-p/cse138/pkg/handlers"
 	"github.com/spencer-p/cse138/pkg/util"
