@@ -24,6 +24,7 @@ const (
 type Config struct {
 	// Port to serve HTTP on
 	Port string `envconfig:"PORT" required:"true"`
+  Address string `envconfig:"ADDRESS" required:"true"`
 }
 
 func main() {
@@ -34,7 +35,7 @@ func main() {
 	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	handlers.Route(r)
+	handlers.Route(r, env.Address)
 
 	srv := &http.Server{
 		Handler:      r,
