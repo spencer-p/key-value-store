@@ -76,6 +76,9 @@ func Route(r *mux.Router) {
 		//address :=
 	}
 
+	// TODO Route needs to be passed the address and initial view
+	// The view should be set in the consistent hash here.
+
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)
