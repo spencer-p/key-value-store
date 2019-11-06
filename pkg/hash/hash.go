@@ -11,7 +11,7 @@ import (
 type Modulo struct {
 	elts []string
 	fnv  hash.Hash32
-	mtx  sync.Mutex
+	mtx  sync.Mutex // TODO Is this lock necessary?
 }
 
 func NewModulo() *Modulo {
@@ -36,6 +36,9 @@ func (m *Modulo) Get(key string) (string, error) {
 
 // Members returns the list of nodes in this hash.
 func (m *Modulo) Members() []string {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
 	return m.elts
 }
 
