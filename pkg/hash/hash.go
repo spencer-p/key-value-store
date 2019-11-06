@@ -21,6 +21,8 @@ func NewModulo() *Modulo {
 	}
 }
 
+// Get returns the address of the node that should store the given key. No error
+// is returned for modulo hashing.
 func (m *Modulo) Get(key string) (string, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
@@ -31,10 +33,13 @@ func (m *Modulo) Get(key string) (string, error) {
 	return m.elts[i], nil
 
 }
+
+// Members returns the list of nodes in this hash.
 func (m *Modulo) Members() []string {
 	return m.elts
 }
 
+// Set atomically assigns the member nodes to its arguments.
 func (m *Modulo) Set(elts []string) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
