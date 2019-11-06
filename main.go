@@ -34,7 +34,7 @@ func main() {
 	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	handlers.Route(r)
+	handlers.New("TODO", []string{"TODO"}).Route(r)
 
 	srv := &http.Server{
 		Handler:      r,

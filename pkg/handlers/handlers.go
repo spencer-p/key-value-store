@@ -13,9 +13,9 @@ import (
 )
 
 type State struct {
-	store *store.Store
-	c     *consistent.Consistent
-	//String address
+	store   *store.Store
+	c       *consistent.Consistent
+	address string
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -69,15 +69,20 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func Route(r *mux.Router) {
-	s := State{
-		store: store.New(),
-		c:     consistent.New(),
-		//address :=
+func New(addr string, view []string) *State {
+	s := &State{
+		store:   store.New(),
+		c:       consistent.New(),
+		address: addr,
 	}
 
-	// TODO Route needs to be passed the address and initial view
-	// The view should be set in the consistent hash here.
+	s.c.Set(view)
+
+	return s
+}
+
+func (s *State) Route(r *mux.Router) {
+	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPost)
 
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
