@@ -108,7 +108,7 @@ func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 
 func (s *State) Route(r *mux.Router) error {
 
-    // TODO: figure out a way to get the forwarding address
+	// TODO: figure out a way to get the forwarding address
 	var address string
 	if !strings.HasPrefix(address, "http://") {
 		address = "http://" + "localhost:" + "8081"
