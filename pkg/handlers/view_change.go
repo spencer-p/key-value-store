@@ -34,7 +34,9 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 
 	log.Printf("Received view change with addrs %v\n", in.View)
 
-	if old := s.c.Members(); !viewEqual(old, in.View) {
+	oldview := s.c.Members()
+	viewIsNew := !viewEqual(oldview, in.View)
+	if viewIsNew {
 		log.Println("This view is new information")
 		// If this view change is new:
 		// 1. Apply it
@@ -54,6 +56,9 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 
 	// TODO - set something meaningful in the response
 	// TODO - if this was an oracle request, fetch the key count from everybody
+	if !in.Internal && viewIsNew {
+		log.Println("Cluster's view change is committed")
+	}
 }
 
 // getBatches retrieves all batches of keys that should be on other nodes and
@@ -158,6 +163,8 @@ func postBatch(cli *http.Client, target string, payload types.Input) error {
 	if !strings.HasPrefix(target, "http://") {
 		target = "http://" + target
 	}
+
+	payload.Internal = true
 
 	var body bytes.Buffer
 	enc := json.NewEncoder(&body)

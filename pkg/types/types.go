@@ -42,6 +42,9 @@ type Input struct {
 	// A View and Batch is only used for view change requests.
 	View  []string `json:"view"`
 	Batch []Entry  `json:"diff"`
+
+	// Marked true only for internal communication.
+	Internal bool `json:"internal,omitempty"`
 }
 
 // An Entry is a key value pair.
