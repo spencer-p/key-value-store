@@ -23,6 +23,20 @@ type State struct {
 	address string
 }
 
+func NewState(addr string, view []string) *State {
+	s := State{
+		store:   store.New(),
+		hash:    consistent.New(),
+		address: addr,
+	}
+
+	for _, node := range view {
+		s.hash.Add(node)
+	}
+
+	return &s
+}
+
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
 	if in.Key == "" {
 		res.Error = msg.KeyMissing
@@ -92,22 +106,12 @@ func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 	return true
 }
 
-func Route(r *mux.Router, address string, nodes []string) error {
-	s := State{
-		store:   store.New(),
-		hash:    consistent.New(),
-		address: address,
-	}
+func (s *State) Route(r *mux.Router) error {
 
-	// TODO Route needs to be passed the address and initial view
-	// The view should be set in the consistent hash here.
-
-	for _, node := range nodes {
-		s.hash.Add(node)
-	}
-
+    // TODO: figure out a way to get the forwarding address
+	var address string
 	if !strings.HasPrefix(address, "http://") {
-		address = "http://" + address
+		address = "http://" + "localhost:" + "8081"
 	}
 
 	addr, err := url.Parse(address)
@@ -130,4 +134,9 @@ func Route(r *mux.Router, address string, nodes []string) error {
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)
 
 	return nil
+}
+
+func InitNode(r *mux.Router, addr string, view []string) {
+	s := NewState(addr, view)
+	s.Route(r)
 }
