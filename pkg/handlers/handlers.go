@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -74,24 +75,24 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
-	// TODO: get the key in this function
-	key := mux.Vars(r)["Key"]
-	log.Println("key " + key)
+	// TODO: try out other ways to parse URL?
+	// parses the key from /kv-store/keys/{key}
 
-	hashedAddress, err := s.hash.Get(key)
+	key := path.Base(r.URL.Path)
+	log.Println("Key: " + key)
 
+	nodeAddr, err := s.hash.Get(key)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
-	log.Println("hashed address: " + hashedAddress)
-	if hashedAddress != s.address {
-		return true
+	if nodeAddr == s.address {
+		return false
 	}
-	return false
+	return true
 }
 
-func Route(r *mux.Router, address string) error {
+func Route(r *mux.Router, address string, nodes []string) error {
 	s := State{
 		store:   store.New(),
 		hash:    consistent.New(),
@@ -101,11 +102,16 @@ func Route(r *mux.Router, address string) error {
 	// TODO Route needs to be passed the address and initial view
 	// The view should be set in the consistent hash here.
 
+	for _, node := range nodes {
+		s.hash.Add(node)
+	}
+
 	if !strings.HasPrefix(address, "http://") {
 		address = "http://" + address
 	}
 
 	addr, err := url.Parse(address)
+
 	if err != nil {
 		return fmt.Errorf("Bad forwarding address %q: %v\n", address, addr)
 	}
@@ -118,7 +124,7 @@ func Route(r *mux.Router, address string) error {
 		addr: addr,
 	}
 
-	r.HandleFunc("/kv-store/{key:.*}", f.forwardMessage).MatcherFunc(s.shouldForward)
+	r.HandleFunc("/kv-store/keys/{key:.*}", f.forwardMessage).MatcherFunc(s.shouldForward)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)

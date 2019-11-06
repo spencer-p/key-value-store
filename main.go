@@ -33,9 +33,11 @@ func main() {
 	log.Printf("Configured: %+v\n", env)
 
 	// Create a mux and route handlers
+	nodes := []string{"8080", "8081"}
+
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	handlers.Route(r, env.Address)
+	handlers.Route(r, env.Address, nodes)
 
 	srv := &http.Server{
 		Handler:      r,
