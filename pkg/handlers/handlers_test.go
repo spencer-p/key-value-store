@@ -153,14 +153,15 @@ func TestPut(t *testing.T) {
 
 			// Create one server per set of requests
 			r := mux.NewRouter()
-			Route(r)
+			s := NewState("", []string{})
+			s.Route(r)
 
 			for i, test := range requests {
 
 				// Run each request as its own test for observability
 				t.Run(fmt.Sprintf("%d %s %s", i, test.method, test.in.Key), func(t *testing.T) {
 					req := httptest.NewRequest(test.method,
-						"/kv-store/"+test.in.Key,
+						"/kv-store/keys/"+test.in.Key,
 						bytes.NewBufferString(`{"value":"`+test.in.Value+`"}`))
 
 					resp := httptest.NewRecorder()
