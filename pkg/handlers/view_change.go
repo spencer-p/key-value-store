@@ -6,11 +6,13 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
+	"github.com/spencer-p/cse138/pkg/util"
 )
 
 const (
@@ -32,7 +34,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 
 	log.Printf("Received view change with addrs %v\n", in.View)
 
-	if !viewEqual(s.c.Members(), in.View) {
+	if old := s.c.Members(); !viewEqual(old, in.View) {
 		log.Println("This view is new information")
 		// If this view change is new:
 		// 1. Apply it
@@ -47,9 +49,11 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	}
 
 	// Always apply the diff - we will get many of these
+	log.Println("Applying a batch of", len(in.Batch), "keys")
 	s.applyBatch(in.Batch)
 
 	// TODO - set something meaningful in the response
+	// TODO - if this was an oracle request, fetch the key count from everybody
 }
 
 // getBatches retrieves all batches of keys that should be on other nodes and
@@ -94,7 +98,9 @@ func dispatchBatches(view []string, batches map[string][]types.Entry) ([]types.E
 	}
 	defer cli.CloseIdleConnections()
 
-	for addr, batch := range batches {
+	for i := range view {
+		addr := view[i]
+		batch := batches[addr]
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -115,16 +121,19 @@ func dispatchBatches(view []string, batches map[string][]types.Entry) ([]types.E
 	go func() {
 		wg.Wait()
 		donech <- struct{}{}
+		close(donech)
+		close(deletech)
 	}()
 
 	var offloaded []types.Entry
+cleanup:
 	for {
 		select {
+		case <-donech:
+			break cleanup
 		case todelete := <-deletech:
 			log.Println(len(todelete), "keys offloaded")
 			offloaded = append(offloaded, todelete...)
-		case <-donech:
-			break
 		}
 	}
 
@@ -139,20 +148,17 @@ func (s *State) applyBatch(batch []types.Entry) {
 
 // viewEqual returns true iff the views are identical.
 func viewEqual(v1 []string, v2 []string) bool {
-	if len(v1) != len(v2) {
-		return false
-	}
+	s1 := util.StringSet(v1)
+	s2 := util.StringSet(v2)
 
-	for i := range v1 {
-		if v1[i] != v2[i] {
-			return false
-		}
-	}
-
-	return true
+	return util.SetEqual(s1, s2)
 }
 
 func postBatch(cli *http.Client, target string, payload types.Input) error {
+	if !strings.HasPrefix(target, "http://") {
+		target = "http://" + target
+	}
+
 	var body bytes.Buffer
 	enc := json.NewEncoder(&body)
 	err := enc.Encode(payload)

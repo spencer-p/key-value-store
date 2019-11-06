@@ -69,7 +69,7 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func New(addr string, view []string) *State {
+func NewState(addr string, view []string) *State {
 	s := &State{
 		store:   store.New(),
 		c:       consistent.New(),
@@ -84,7 +84,7 @@ func New(addr string, view []string) *State {
 func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPost)
 
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)
 }

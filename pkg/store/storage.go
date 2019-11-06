@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"log"
 	"sync"
 )
@@ -63,4 +64,10 @@ func (s *Store) NumKeys() int {
 	defer s.m.RUnlock()
 
 	return len(s.store)
+}
+
+func (s *Store) String() string {
+	s.m.RLock()
+	defer s.m.RUnlock()
+	return fmt.Sprintf("%+v", s.store)
 }

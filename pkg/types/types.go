@@ -89,13 +89,25 @@ func ParseInput(r *http.Request, in *Input) (ok bool, err string) {
 		}
 	}
 
-	if in.Key == "" {
-		return false, msg.KeyMissing
-	} else if len(in.Key) > 50 {
-		return false, msg.KeyTooLong
-	}
-
 	return true, ""
+}
+
+// ValidateKey catches invalid keys and returns an invalid request. If the key
+// is valid, the handler passes through.
+func ValidateKey(next func(Input, *Response)) func(Input, *Response) {
+	return func(in Input, res *Response) {
+		if in.Key == "" {
+			res.Error = msg.KeyMissing
+			res.Status = http.StatusBadRequest
+			return
+		} else if len(in.Key) > 50 {
+			res.Error = msg.KeyTooLong
+			res.Status = http.StatusBadRequest
+			return
+		}
+
+		next(in, res)
+	}
 }
 
 // Serve writes a response struct to an http response.
