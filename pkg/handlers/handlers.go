@@ -4,17 +4,17 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/gorilla/mux"
-	"stathat.com/c/consistent"
 )
 
 type State struct {
 	store   *store.Store
-	c       *consistent.Consistent
+	c       hash.Interface
 	address string
 }
 
@@ -72,7 +72,7 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 func NewState(addr string, view []string) *State {
 	s := &State{
 		store:   store.New(),
-		c:       consistent.New(),
+		c:       hash.NewModulo(),
 		address: addr,
 	}
 
