@@ -30,7 +30,10 @@ func NewState(addr string, view []string) *State {
 		address: addr,
 	}
 
+	log.Println("My address is: " + s.address)
+
 	for _, node := range view {
+		log.Println("Node added to hash " + node)
 		s.hash.Add(node)
 	}
 

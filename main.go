@@ -33,7 +33,11 @@ func main() {
 	log.Printf("Configured: %+v\n", env)
 
 	// Create a mux and route handlers
-	view := util.CSVToSlice(env.View)
+	view, err := util.CSVToSlice(env.View)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
