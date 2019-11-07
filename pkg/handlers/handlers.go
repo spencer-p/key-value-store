@@ -16,6 +16,7 @@ type State struct {
 	store   *store.Store
 	c       hash.Interface
 	address string
+	cli     *http.Client
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -74,6 +75,9 @@ func NewState(addr string, view []string) *State {
 		store:   store.New(),
 		c:       hash.NewModulo(),
 		address: addr,
+		cli: &http.Client{
+			Timeout: CLIENT_TIMEOUT,
+		},
 	}
 
 	s.c.Set(view)
