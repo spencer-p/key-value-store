@@ -23,7 +23,7 @@ const (
 
 type Config struct {
 	// Port to serve HTTP on
-	Port    string `envconfig:"PORT" required:"true"`
+	View    string `envconfig:"VIEW" required:"true"`
 	Address string `envconfig:"ADDRESS" required:"true"`
 }
 
@@ -33,7 +33,7 @@ func main() {
 	log.Printf("Configured: %+v\n", env)
 
 	// Create a mux and route handlers
-	view := []string{"8080", "8081"}
+	view := util.CSVToSlice(env.View)
 
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
@@ -41,7 +41,7 @@ func main() {
 
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         "0.0.0.0:" + env.Port,
+		Addr:         env.Address,
 		ReadTimeout:  TIMEOUT,
 		WriteTimeout: TIMEOUT,
 	}
