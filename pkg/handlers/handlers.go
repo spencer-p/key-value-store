@@ -9,33 +9,34 @@ import (
 	"path"
 	"strings"
 
+	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/gorilla/mux"
-	"stathat.com/c/consistent"
 )
 
 type State struct {
 	store   *store.Store
-	hash    *consistent.Consistent
+	hash    hash.Interface
 	address string
 }
 
 func NewState(addr string, view []string) *State {
 	s := State{
 		store:   store.New(),
-		hash:    consistent.New(),
+		hash:    hash.NewModulo(),
 		address: addr,
 	}
 
 	log.Println("My address is: " + s.address)
 
-	for _, node := range view {
-		log.Println("Node added to hash " + node)
-		s.hash.Add(node)
-	}
+	allViews := strings.Join(view, ",")
+
+	log.Println("Adding these node address to members of hash " + allViews)
+
+	s.hash.Set(view)
 
 	return &s
 }
