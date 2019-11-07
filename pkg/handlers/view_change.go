@@ -3,11 +3,10 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
@@ -16,14 +15,8 @@ import (
 )
 
 const (
-	VIEWCHANGE_TIMEOUT  = 1 * time.Second
 	VIEWCHANGE_ENDPOINT = "/kv-store/view-change"
 	KEYCOUNT_ENDPOINT   = "/kv-store/key-count"
-	CONTENTTYPE         = "application/json"
-)
-
-var (
-	BatchRejected = errors.New("Non-200 code received")
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
@@ -55,14 +48,15 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	log.Println("Applying a batch of", len(in.Batch), "keys")
 	s.applyBatch(in.Batch)
 
-	// TODO - set something meaningful in the response
-	// TODO - if this was an oracle request, fetch the key count from everybody
 	if !(!in.Internal && viewIsNew) {
 		// We are not the first node to receive the view change - no further
 		// action is required.
+		res.Message = msg.PartialViewChangeSuccess
 		return
 	}
 
+	// We're the node that initiated the view change -- return a meaningful
+	// response to the oracle
 	log.Println("Cluster's view change is committed to all nodes")
 	res.Message = msg.ViewChangeSuccess
 	res.Shards = s.getKeyCounts(in.View)
@@ -105,14 +99,13 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 	deletech := make(chan []types.Entry)
 	donech := make(chan struct{})
 
+	// Spin up a goroutine to send each batch to each node
 	for i := range view {
-		addr := view[i]
-		batch := batches[addr]
 		wg.Add(1)
-		go func() {
+		go func(addr string, batch []types.Entry) {
 			defer wg.Done()
 			log.Printf("Sending view/batch with %d keys to %q\n", len(batch), addr)
-			err := s.postBatch(addr, types.Input{
+			err := s.sendBatch(addr, types.Input{
 				View:  view,
 				Batch: batch,
 			})
@@ -122,9 +115,13 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 				return
 			}
 			deletech <- batch
-		}()
+		}(view[i], batches[view[i]])
 	}
 
+	// Wait for all the goroutines to terminate.
+	// When the waitgroup is done, everything in the deletech has been
+	// processed. We can then notify ourselves via donech and close both
+	// channels.
 	go func() {
 		wg.Wait()
 		donech <- struct{}{}
@@ -132,19 +129,18 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 		close(deletech)
 	}()
 
+	// Accumulate all the keys that have been successfully offloaded and return
+	// them with a potential error when done
 	var offloaded []types.Entry
-cleanup:
 	for {
 		select {
 		case <-donech:
-			break cleanup
+			return offloaded, finalerr
 		case todelete := <-deletech:
 			log.Println(len(todelete), "keys offloaded")
 			offloaded = append(offloaded, todelete...)
 		}
 	}
-
-	return offloaded, finalerr
 }
 
 func (s *State) applyBatch(batch []types.Entry) {
@@ -161,26 +157,35 @@ func viewEqual(v1 []string, v2 []string) bool {
 	return util.SetEqual(s1, s2)
 }
 
-func (s *State) postBatch(target string, payload types.Input) error {
+// sendBatch sends a types.Input to the target node's address.
+func (s *State) sendBatch(target string, payload types.Input) error {
 	payload.Internal = true
 
+	// Encode the payload to a buffer
 	var body bytes.Buffer
 	enc := json.NewEncoder(&body)
 	err := enc.Encode(payload)
 	if err != nil {
-		log.Println("Failed to encode payload to send a view change:", err)
-		return err
+		return fmt.Errorf("failed to encode payload: %w", err)
 	}
 
-	resp, err := s.cli.Post(util.CorrectURL(target+VIEWCHANGE_ENDPOINT), CONTENTTYPE, &body)
+	// Build a request with our payload to the target address
+	target = util.CorrectURL(target + VIEWCHANGE_ENDPOINT)
+	req, err := http.NewRequest(http.MethodPut, target, &body)
 	if err != nil {
-		log.Println("Failed to make view change POST:", err)
-		return err
+		return fmt.Errorf("failed to build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request & return a useful result
+	resp, err := s.cli.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to do view change request: %w", err)
 	}
 
 	// TODO Parse the response
 	if resp.StatusCode != http.StatusOK {
-		return BatchRejected
+		return fmt.Errorf("non-200 status code: %d", resp.StatusCode)
 	}
 	return nil
 }
