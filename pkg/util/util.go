@@ -43,3 +43,11 @@ func SetEqual(s1, s2 map[string]struct{}) bool {
 
 	return true
 }
+
+// CorrectURL makes sure an address is a real URL.
+func CorrectURL(addr string) string {
+	if !strings.HasPrefix(addr, "http://") {
+		addr = "http://" + addr
+	}
+	return addr
+}

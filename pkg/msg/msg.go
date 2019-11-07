@@ -3,10 +3,11 @@ package msg
 const (
 	MainFailure = "Main instance is down"
 
-	PutSuccess    = "Added successfully"
-	UpdateSuccess = "Updated successfully"
-	GetSuccess    = "Retrieved successfully"
-	DeleteSuccess = "Deleted successfully"
+	PutSuccess        = "Added successfully"
+	UpdateSuccess     = "Updated successfully"
+	GetSuccess        = "Retrieved successfully"
+	DeleteSuccess     = "Deleted successfully"
+	ViewChangeSuccess = "View change successful"
 
 	FailedToParse = "Failed to parse request body"
 	KeyMissing    = "Key is missing"

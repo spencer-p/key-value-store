@@ -6,10 +6,10 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
@@ -18,6 +18,7 @@ import (
 const (
 	VIEWCHANGE_TIMEOUT  = 1 * time.Second
 	VIEWCHANGE_ENDPOINT = "/kv-store/view-change"
+	KEYCOUNT_ENDPOINT   = "/kv-store/key-count"
 	CONTENTTYPE         = "application/json"
 )
 
@@ -43,7 +44,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 		// 2. Send out all our diffs
 		s.c.Set(in.View)
 		batches := s.getBatches()
-		offloaded, err := dispatchBatches(in.View, batches)
+		offloaded, err := s.dispatchBatches(in.View, batches)
 		if err != nil {
 			log.Println("Failed to offload some keys:", err)
 		}
@@ -56,9 +57,15 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 
 	// TODO - set something meaningful in the response
 	// TODO - if this was an oracle request, fetch the key count from everybody
-	if !in.Internal && viewIsNew {
-		log.Println("Cluster's view change is committed")
+	if !(!in.Internal && viewIsNew) {
+		// We are not the first node to receive the view change - no further
+		// action is required.
+		return
 	}
+
+	log.Println("Cluster's view change is committed to all nodes")
+	res.Message = msg.ViewChangeSuccess
+	res.Shards = s.getKeyCounts(in.View)
 }
 
 // getBatches retrieves all batches of keys that should be on other nodes and
@@ -92,16 +99,11 @@ func (s *State) deleteEntries(entries []types.Entry) {
 
 // dispatchBatches forwards a view change to all other nodes in the view.
 // A list of batches that were successfully dispatched is returned with an error.
-func dispatchBatches(view []string, batches map[string][]types.Entry) ([]types.Entry, error) {
+func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry) ([]types.Entry, error) {
 	var wg sync.WaitGroup
 	var finalerr error
 	deletech := make(chan []types.Entry)
 	donech := make(chan struct{})
-
-	cli := &http.Client{
-		Timeout: VIEWCHANGE_TIMEOUT,
-	}
-	defer cli.CloseIdleConnections()
 
 	for i := range view {
 		addr := view[i]
@@ -110,7 +112,7 @@ func dispatchBatches(view []string, batches map[string][]types.Entry) ([]types.E
 		go func() {
 			defer wg.Done()
 			log.Printf("Sending view/batch with %d keys to %q\n", len(batch), addr)
-			err := postBatch(cli, addr, types.Input{
+			err := s.postBatch(addr, types.Input{
 				View:  view,
 				Batch: batch,
 			})
@@ -159,11 +161,7 @@ func viewEqual(v1 []string, v2 []string) bool {
 	return util.SetEqual(s1, s2)
 }
 
-func postBatch(cli *http.Client, target string, payload types.Input) error {
-	if !strings.HasPrefix(target, "http://") {
-		target = "http://" + target
-	}
-
+func (s *State) postBatch(target string, payload types.Input) error {
 	payload.Internal = true
 
 	var body bytes.Buffer
@@ -174,7 +172,7 @@ func postBatch(cli *http.Client, target string, payload types.Input) error {
 		return err
 	}
 
-	resp, err := cli.Post(target+VIEWCHANGE_ENDPOINT, CONTENTTYPE, &body)
+	resp, err := s.cli.Post(util.CorrectURL(target+VIEWCHANGE_ENDPOINT), CONTENTTYPE, &body)
 	if err != nil {
 		log.Println("Failed to make view change POST:", err)
 		return err
@@ -185,4 +183,58 @@ func postBatch(cli *http.Client, target string, payload types.Input) error {
 		return BatchRejected
 	}
 	return nil
+}
+
+// getKeyCounts retrieves information about the shards for the given view.
+func (s *State) getKeyCounts(view []string) []types.Shard {
+	shards := make([]types.Shard, len(view))
+	var wg sync.WaitGroup
+
+	log.Println("Requesting key counts from the other nodes")
+	for i := range view {
+		wg.Add(1)
+		go func(addr string, shard *types.Shard) {
+			defer wg.Done()
+
+			// Set the address and an invalid value before we found out the
+			// actual value
+			shard.Address = addr
+			shard.KeyCount = -1
+
+			// Don't make a request if it's just ourselves
+			if addr == s.address {
+				shard.KeyCount = s.store.NumKeys()
+				return
+			}
+
+			// Dispatch a get request to the other node
+			resp, err := s.cli.Get(util.CorrectURL(addr) + KEYCOUNT_ENDPOINT)
+			if err != nil {
+				log.Printf("Failed to send a req to %q: %v\n", addr, err)
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Node at %q returned %d for key count\n", addr, resp.StatusCode)
+				return
+			}
+
+			// Parse the response
+			var response types.Response
+			if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+				log.Printf("Failed to parse response from %q: %v\n", addr, err)
+				return
+			}
+
+			if response.KeyCount == nil {
+				log.Printf("Response from %q does not have a key count\n", addr)
+				return
+			}
+
+			// We actually got a response!
+			shard.KeyCount = *response.KeyCount
+		}(view[i], &shards[i])
+	}
+
+	wg.Wait()
+	return shards
 }
