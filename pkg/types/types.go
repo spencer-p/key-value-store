@@ -40,8 +40,8 @@ type Input struct {
 	Entry `json:",inline"`
 
 	// A View and Batch is only used for view change requests.
-	View  []string `json:"view"`
-	Batch []Entry  `json:"diff"`
+	View  string  `json:"view"`
+	Batch []Entry `json:"diff"`
 
 	// Marked true only for internal communication.
 	Internal bool `json:"internal,omitempty"`

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -20,24 +21,25 @@ const (
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
-	if len(in.View) == 0 {
+	view := strings.Split(in.View, ",")
+	if len(view) == 0 {
 		res.Status = http.StatusBadRequest
-		res.Error = "TODO"
+		res.Error = msg.FailedToParse
 		return
 	}
 
-	log.Printf("Received view change with addrs %v\n", in.View)
+	log.Printf("Received view change with addrs %v\n", view)
 
 	oldview := s.c.Members()
-	viewIsNew := !viewEqual(oldview, in.View)
+	viewIsNew := !viewEqual(oldview, view)
 	if viewIsNew {
 		log.Println("This view is new information")
 		// If this view change is new:
 		// 1. Apply it
 		// 2. Send out all our diffs
-		s.c.Set(in.View)
+		s.c.Set(view)
 		batches := s.getBatches()
-		offloaded, err := s.dispatchBatches(in.View, batches)
+		offloaded, err := s.dispatchBatches(view, batches)
 		if err != nil {
 			log.Println("Failed to offload some keys:", err)
 		}
@@ -59,7 +61,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	// response to the oracle
 	log.Println("Cluster's view change is committed to all nodes")
 	res.Message = msg.ViewChangeSuccess
-	res.Shards = s.getKeyCounts(in.View)
+	res.Shards = s.getKeyCounts(view)
 }
 
 // getBatches retrieves all batches of keys that should be on other nodes and
@@ -106,7 +108,7 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 			defer wg.Done()
 			log.Printf("Sending view/batch with %d keys to %q\n", len(batch), addr)
 			err := s.sendBatch(addr, types.Input{
-				View:  view,
+				View:  strings.Join(view, ","),
 				Batch: batch,
 			})
 			if err != nil {

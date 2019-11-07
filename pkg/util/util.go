@@ -1,7 +1,6 @@
 package util
 
 import (
-	"encoding/csv"
 	"log"
 	"net/http"
 	"strings"
@@ -13,12 +12,6 @@ func WithLog(next http.Handler) http.Handler {
 		log.Printf("%s %s\n", r.Method, r.URL)
 		next.ServeHTTP(w, r)
 	})
-}
-
-// CSVToSlice parses a comma separated string into its constituent strings.
-func CSVToSlice(in string) ([]string, error) {
-	reader := csv.NewReader(strings.NewReader(in))
-	return reader.Read()
 }
 
 func StringSet(slice []string) map[string]struct{} {

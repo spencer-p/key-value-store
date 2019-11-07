@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/spencer-p/cse138/pkg/store"
@@ -116,7 +117,7 @@ func TestViewChange(t *testing.T) {
 	var res types.Response
 	res.Status = 200
 	st[2].viewChange(types.Input{
-		View: view,
+		View: strings.Join(view, ","),
 	}, &res)
 	if res.Status != 200 {
 		t.Error("Non-200 code from view change")
