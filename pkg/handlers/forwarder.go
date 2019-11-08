@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
+	"github.com/spencer-p/cse138/pkg/util"
 )
 
 const (
@@ -30,11 +30,7 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !strings.HasPrefix(s.address, "http://") {
-		s.address = "http://" + s.address
-	}
-
-	target, err := url.Parse(s.address)
+	target, err := url.Parse(util.CorrectURL(s.address))
 
 	result := types.Response{}
 	if err != nil {

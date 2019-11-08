@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"path"
-	"strings"
 
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -78,13 +77,15 @@ func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 	// parses the key from /kv-store/keys/{key}
 
 	key := path.Base(r.URL.Path)
-	log.Println("Key: " + key)
+	log.Println("Key:", key)
 
 	nodeAddr, err := s.hash.Get(key)
 
-	log.Println("nodeAddr " + nodeAddr)
+	log.Println("Address received from hash: ", nodeAddr)
 	if err != nil {
-		log.Fatalln(err)
+		log.Println("Error : bad forwarding address -> ", err)
+		log.Println("This node will handle the request")
+		return false
 	}
 
 	if nodeAddr == s.address {
@@ -111,9 +112,7 @@ func NewState(addr string, view []string) *State {
 		},
 	}
 
-	allViews := strings.Join(view, ",")
-
-	log.Println("Adding these node address to members of hash " + allViews)
+	log.Println("Adding these node address to members of hash ", view)
 	s.hash.Set(view)
 
 	return s

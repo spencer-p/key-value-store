@@ -34,15 +34,15 @@ func main() {
 	log.Printf("Configured: %+v\n", env)
 
 	// Create a mux and route handlers
-	view := strings.Split(env.View, ",")
 
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	handlers.InitNode(r, env.Address, view)
+	handlers.InitNode(r, env.Address, strings.Split(env.View, ","))
 
+	port := strings.Split(env.Address, ":")
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         env.Address,
+		Addr:         "0.0.0.0:" + port[1],
 		ReadTimeout:  TIMEOUT,
 		WriteTimeout: TIMEOUT,
 	}
