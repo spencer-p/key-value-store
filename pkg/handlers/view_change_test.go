@@ -133,7 +133,7 @@ func TestViewChange(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		st[i].store.For(func(key, value string) store.IterAction {
-			target, _ := st[i].c.Get(key)
+			target, _ := st[i].hash.Get(key)
 			if target != st[i].address {
 				t.Errorf("Key %q is on %q but should be on %q", key, st[i].address, target)
 			}

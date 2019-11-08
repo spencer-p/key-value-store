@@ -3,7 +3,6 @@ package handlers
 
 import (
 	"bytes"
-	//"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -23,12 +22,6 @@ const (
 	CLIENT_TIMEOUT = 2 * time.Second
 )
 
-// follower holds all state that a follower needs to operate.
-type forwarder struct {
-	client http.Client
-	addr   *url.URL
-}
-
 func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	requestBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -43,8 +36,11 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 
 	target, err := url.Parse(s.address)
 
+	result := types.Response{}
 	if err != nil {
-		//return fmt.Errorf("Bad forwarding address %q: %v\n", s.address, target)
+		log.Println("Bad forwarding address")
+		result.Error = msg.BadForwarding
+		result.Serve(w, r)
 	}
 
 	target.Path = path.Join(target.Path, r.URL.Path)
@@ -64,10 +60,8 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("Failed to do proxy request:", err)
 		// Presumably the leader is down.
-		result := types.Response{
-			Status: http.StatusServiceUnavailable,
-			Error:  msg.MainFailure,
-		}
+		result.Status = http.StatusServiceUnavailable
+		result.Error = msg.MainFailure
 		result.Serve(w, request)
 		return
 	}
