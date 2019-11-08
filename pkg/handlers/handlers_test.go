@@ -15,6 +15,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	FAKE_ADDRESS = "1.1.1.1"
+)
+
 func kv(key, value string) types.Input {
 	return types.Input{Entry: types.Entry{
 		Key:   key,
@@ -153,7 +157,7 @@ func TestPut(t *testing.T) {
 
 			// Create one server per set of requests
 			r := mux.NewRouter()
-			s := NewState("", []string{})
+			s := NewState(FAKE_ADDRESS, []string{FAKE_ADDRESS})
 			s.Route(r)
 
 			for i, test := range requests {
