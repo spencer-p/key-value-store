@@ -73,26 +73,19 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
-	// TODO: try out other ways to parse URL?
-	// parses the key from /kv-store/keys/{key}
-
 	key := path.Base(r.URL.Path)
-	log.Println("Key:", key)
-
 	nodeAddr, err := s.hash.Get(key)
-
-	log.Println("Address received from hash:", nodeAddr)
 	if err != nil {
-		log.Println("Error : bad forwarding address ->", err)
+		log.Println("Failed to get address for key %q: %v\n", key, err)
 		log.Println("This node will handle the request")
 		return false
 	}
 
 	if nodeAddr == s.address {
-		log.Println("Serve key to this node!")
+		log.Printf("Key %d is serviced by this node\n")
 		return false
 	} else {
-		s.address = nodeAddr
+		log.Printf("Key %d is serviced by %q\n")
 		return true
 	}
 }
