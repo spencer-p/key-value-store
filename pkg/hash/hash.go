@@ -1,10 +1,15 @@
 package hash
 
 import (
+	"errors"
 	"fmt"
 	"hash"
 	"hash/fnv"
 	"sync"
+)
+
+var (
+	ErrNoElements = errors.New("No elements to hash to")
 )
 
 // Modulo implements simple modulo hashing.
@@ -21,15 +26,19 @@ func NewModulo() *Modulo {
 	}
 }
 
-// Get returns the address of the node that should store the given key. No error
-// is returned for modulo hashing.
+// Get returns the address of the node that should store the given key.
 func (m *Modulo) Get(key string) (string, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
+	n := uint32(len(m.elts))
+	if n == 0 {
+		return "", ErrNoElements
+	}
+
 	m.fnv.Reset()
 	fmt.Fprintf(m.fnv, key)
-	i := m.fnv.Sum32() % uint32(len(m.elts))
+	i := m.fnv.Sum32() % n
 	return m.elts[i], nil
 
 }
