@@ -4,7 +4,6 @@ package handlers
 import (
 	"log"
 	"net/http"
-	"path"
 
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -69,24 +68,6 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 		res.Message = msg.UpdateSuccess
 	} else {
 		res.Status = http.StatusCreated
-	}
-}
-
-func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
-	key := path.Base(r.URL.Path)
-	nodeAddr, err := s.hash.Get(key)
-	if err != nil {
-		log.Println("Failed to get address for key %q: %v\n", key, err)
-		log.Println("This node will handle the request")
-		return false
-	}
-
-	if nodeAddr == s.address {
-		log.Printf("Key %d is serviced by this node\n")
-		return false
-	} else {
-		log.Printf("Key %d is serviced by %q\n")
-		return true
 	}
 }
 
