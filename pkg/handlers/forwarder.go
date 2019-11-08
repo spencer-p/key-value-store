@@ -3,12 +3,14 @@ package handlers
 
 import (
 	"bytes"
+	//"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -27,7 +29,7 @@ type forwarder struct {
 	addr   *url.URL
 }
 
-func (f *forwarder) forwardMessage(w http.ResponseWriter, r *http.Request) {
+func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	requestBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Println("Failed to read body:", err)
@@ -35,7 +37,16 @@ func (f *forwarder) forwardMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := *f.addr
+	if !strings.HasPrefix(s.address, "http://") {
+		s.address = "http://" + s.address
+	}
+
+	target, err := url.Parse(s.address)
+
+	if err != nil {
+		//return fmt.Errorf("Bad forwarding address %q: %v\n", s.address, target)
+	}
+
 	target.Path = path.Join(target.Path, r.URL.Path)
 
 	request, err := http.NewRequest(r.Method,
@@ -49,7 +60,7 @@ func (f *forwarder) forwardMessage(w http.ResponseWriter, r *http.Request) {
 
 	request.Header = r.Header.Clone()
 
-	resp, err := f.client.Do(request)
+	resp, err := s.cli.Do(request)
 	if err != nil {
 		log.Println("Failed to do proxy request:", err)
 		// Presumably the leader is down.

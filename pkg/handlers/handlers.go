@@ -2,10 +2,8 @@
 package handlers
 
 import (
-	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 
@@ -21,24 +19,7 @@ type State struct {
 	store   *store.Store
 	hash    hash.Interface
 	address string
-}
-
-func NewState(addr string, view []string) *State {
-	s := State{
-		store:   store.New(),
-		hash:    hash.NewModulo(),
-		address: addr,
-	}
-
-	log.Println("My address is: " + s.address)
-
-	allViews := strings.Join(view, ",")
-
-	log.Println("Adding these node address to members of hash " + allViews)
-
-	s.hash.Set(view)
-
-	return &s
+	cli     *http.Client
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -100,47 +81,49 @@ func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 	log.Println("Key: " + key)
 
 	nodeAddr, err := s.hash.Get(key)
+
+	log.Println("nodeAddr " + nodeAddr)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	if nodeAddr == s.address {
+		log.Println("Serve key to this node!")
 		return false
+	} else {
+		s.address = nodeAddr
+		return true
 	}
-	return true
-}
-
-func (s *State) Route(r *mux.Router) error {
-
-	// TODO: figure out a way to get the forwarding address
-	var address string
-	if !strings.HasPrefix(address, "http://") {
-		address = "http://" + "localhost:" + "8081"
-	}
-
-	addr, err := url.Parse(address)
-
-	if err != nil {
-		return fmt.Errorf("Bad forwarding address %q: %v\n", address, addr)
-	}
-
-	// Only necessary if we need to forward
-	f := forwarder{
-		client: http.Client{
-			Timeout: CLIENT_TIMEOUT,
-		},
-		addr: addr,
-	}
-
-	r.HandleFunc("/kv-store/keys/{key:.*}", f.forwardMessage).MatcherFunc(s.shouldForward)
-	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
-	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
-	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)
-
-	return nil
 }
 
 func InitNode(r *mux.Router, addr string, view []string) {
 	s := NewState(addr, view)
 	s.Route(r)
+}
+
+func NewState(addr string, view []string) *State {
+	s := &State{
+		store:   store.New(),
+		hash:    hash.NewModulo(),
+		address: addr,
+		cli: &http.Client{
+			Timeout: CLIENT_TIMEOUT,
+		},
+	}
+
+	allViews := strings.Join(view, ",")
+
+	log.Println("Adding these node address to members of hash " + allViews)
+	s.hash.Set(view)
+
+	return s
+}
+
+func (s *State) Route(r *mux.Router) {
+	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForward)
+	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
+
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)
 }
