@@ -37,10 +37,10 @@ func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 	}
 
 	if nodeAddr == s.address {
-		log.Printf("Key %d is serviced by this node\n")
+		log.Printf("Key %q is serviced by this node\n", key)
 		return false
 	} else {
-		log.Printf("Key %d is serviced by %q\n")
+		log.Printf("Key %q is serviced by %q\n", key, nodeAddr)
 
 		// Store the target node address in the http request context.
 		ctx := context.WithValue(r.Context(), ADDRESS_KEY, nodeAddr)
