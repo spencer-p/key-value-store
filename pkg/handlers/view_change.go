@@ -30,14 +30,14 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 
 	log.Printf("Received view change with addrs %v\n", view)
 
-	oldview := s.c.Members()
+	oldview := s.hash.Members()
 	viewIsNew := !viewEqual(oldview, view)
 	if viewIsNew {
 		log.Println("This view is new information")
 		// If this view change is new:
 		// 1. Apply it
 		// 2. Send out all our diffs
-		s.c.Set(view)
+		s.hash.Set(view)
 		batches := s.getBatches()
 		offloaded, err := s.dispatchBatches(view, batches)
 		if err != nil {
@@ -69,7 +69,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 func (s *State) getBatches() map[string][]types.Entry {
 	batches := make(map[string][]types.Entry)
 	s.store.For(func(key, value string) store.IterAction {
-		target, err := s.c.Get(key)
+		target, err := s.hash.Get(key)
 		if err != nil {
 			log.Printf("Invalid key %q=%q: %v. Dropping.\n", key, value, err)
 		}

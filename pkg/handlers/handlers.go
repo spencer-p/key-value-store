@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/spencer-p/cse138/pkg/hash"
@@ -14,7 +15,7 @@ import (
 
 type State struct {
 	store   *store.Store
-	c       hash.Interface
+	hash    hash.Interface
 	address string
 	cli     *http.Client
 }
@@ -70,22 +71,29 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
+func InitNode(r *mux.Router, addr string, view []string) {
+	s := NewState(addr, view)
+	s.Route(r)
+}
+
 func NewState(addr string, view []string) *State {
 	s := &State{
 		store:   store.New(),
-		c:       hash.NewModulo(),
+		hash:    hash.NewModulo(),
 		address: addr,
 		cli: &http.Client{
 			Timeout: CLIENT_TIMEOUT,
 		},
 	}
 
-	s.c.Set(view)
+	log.Println("Adding these node address to members of hash", view)
+	s.hash.Set(view)
 
 	return s
 }
 
 func (s *State) Route(r *mux.Router) {
+	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForward)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
