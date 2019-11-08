@@ -24,6 +24,7 @@ const (
 
 type Config struct {
 	// Config VIEW and ADDRESS
+	Port    string `envconfig:"PORT" required:"true"`
 	View    string `envconfig:"VIEW" required:"true"`
 	Address string `envconfig:"ADDRESS" required:"true"`
 }
@@ -42,7 +43,7 @@ func main() {
 	port := strings.Split(env.Address, ":")
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         "0.0.0.0:" + port[1],
+		Addr:         "0.0.0.0:" + env.Port,
 		ReadTimeout:  TIMEOUT,
 		WriteTimeout: TIMEOUT,
 	}

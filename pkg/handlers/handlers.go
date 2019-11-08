@@ -81,9 +81,9 @@ func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 
 	nodeAddr, err := s.hash.Get(key)
 
-	log.Println("Address received from hash: ", nodeAddr)
+	log.Println("Address received from hash:", nodeAddr)
 	if err != nil {
-		log.Println("Error : bad forwarding address -> ", err)
+		log.Println("Error : bad forwarding address ->", err)
 		log.Println("This node will handle the request")
 		return false
 	}
@@ -112,7 +112,7 @@ func NewState(addr string, view []string) *State {
 		},
 	}
 
-	log.Println("Adding these node address to members of hash ", view)
+	log.Println("Adding these node address to members of hash", view)
 	s.hash.Set(view)
 
 	return s
