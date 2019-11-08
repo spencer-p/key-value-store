@@ -13,9 +13,10 @@ import (
 )
 
 type State struct {
-	store *store.Store
-	c     hash.Interface
-	//String address
+	store   *store.Store
+	c       hash.Interface
+	address string
+	cli     *http.Client
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -69,17 +70,25 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func Route(r *mux.Router) {
-	s := State{
-		store: store.New(),
-		c:     hash.NewModulo(), // alternatively consistent.New()
-		//address :=
+func NewState(addr string, view []string) *State {
+	s := &State{
+		store:   store.New(),
+		c:       hash.NewModulo(),
+		address: addr,
+		cli: &http.Client{
+			Timeout: CLIENT_TIMEOUT,
+		},
 	}
 
-	// TODO Route needs to be passed the address and initial view
-	// The view should be set in the consistent hash here.
+	s.c.Set(view)
 
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.putHandler)).Methods(http.MethodPut)
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.deleteHandler)).Methods(http.MethodDelete)
-	r.HandleFunc("/kv-store/{key:.*}", types.WrapHTTP(s.getHandler)).Methods(http.MethodGet)
+	return s
+}
+
+func (s *State) Route(r *mux.Router) {
+	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
+
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)
 }
