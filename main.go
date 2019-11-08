@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,7 +24,8 @@ const (
 
 type Config struct {
 	// Port to serve HTTP on
-	Port string `envconfig:"PORT" required:"true"`
+	View    string `envconfig:"VIEW" required:"true"`
+	Address string `envconfig:"ADDRESS" required:"true"`
 }
 
 func main() {
@@ -32,14 +34,16 @@ func main() {
 	log.Printf("Configured: %+v\n", env)
 
 	// Create a mux and route handlers
+	view := strings.Split(env.View, ",")
+
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	state := handlers.NewState("TODO", []string{"TODO"})
+	state := handlers.NewState(env.Address, view)
 	state.Route(r)
 
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         "0.0.0.0:" + env.Port,
+		Addr:         "0.0.0.0:" + env.Address,
 		ReadTimeout:  TIMEOUT,
 		WriteTimeout: TIMEOUT,
 	}

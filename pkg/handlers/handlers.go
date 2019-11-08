@@ -2,7 +2,9 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+	"path"
 
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -85,8 +87,31 @@ func NewState(addr string, view []string) *State {
 	return s
 }
 
+func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
+	// TODO: try out other ways to parse URL?
+	// parses the key from /kv-store/keys/{key}
+
+	key := path.Base(r.URL.Path)
+	log.Println("Key: " + key)
+
+	nodeAddr, err := s.c.Get(key)
+	log.Println("Node Addr: " + nodeAddr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	if nodeAddr == s.address {
+		return false
+	}
+	return true
+}
+
 func (s *State) Route(r *mux.Router) {
+
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
+
+	// TODO: handle forwarding here
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).MatcherFunc(s.shouldForward)
 
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)

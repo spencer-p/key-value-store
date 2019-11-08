@@ -1,4 +1,4 @@
-// Package leader implements handlers for follower instances.
+// Package leader implements handlers for forwarder instances.
 package handlers
 
 import (
@@ -25,13 +25,13 @@ const (
 	CLIENT_TIMEOUT = 2 * time.Second
 )
 
-// follower holds all state that a follower needs to operate.
-type follower struct {
+// forwarder holds all state that a forwarder needs to operate.
+type forwarder struct {
 	client http.Client
 	addr   *url.URL
 }
 
-func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
+func (f *forwarder) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	requestBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Println("Failed to read body:", err)
@@ -56,7 +56,7 @@ func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 	resp, err := f.client.Do(request)
 	if err != nil {
 		log.Println("Failed to do proxy request:", err)
-		// Presumably the leader is down.
+		// Presumably the destination node is down.
 		result := types.Response{
 			Status: http.StatusServiceUnavailable,
 			Error:  msg.MainFailure,
@@ -69,7 +69,7 @@ func (f *follower) indexHandler(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, resp.Body)
 }
 
-func RouteFollower(r *mux.Router, fwd string) error {
+func RouteForwarder(r *mux.Router, fwd string) error {
 	if !strings.HasPrefix(fwd, "http://") {
 		fwd = "http://" + fwd
 	}
@@ -79,13 +79,13 @@ func RouteFollower(r *mux.Router, fwd string) error {
 		return fmt.Errorf("Bad forwarding address %q: %v\n", fwd, addr)
 	}
 
-	f := follower{
+	f := forwarder{
 		client: http.Client{
 			Timeout: CLIENT_TIMEOUT,
 		},
 		addr: addr,
 	}
 
-	r.PathPrefix("/").Handler(http.HandlerFunc(f.indexHandler))
+	r.PathPrefix("/").Handler(http.HandlerFunc(f.forwardMessage))
 	return nil
 }
