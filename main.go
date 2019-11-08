@@ -40,7 +40,6 @@ func main() {
 	r.Use(util.WithLog)
 	handlers.InitNode(r, env.Address, strings.Split(env.View, ","))
 
-	port := strings.Split(env.Address, ":")
 	srv := &http.Server{
 		Handler:      r,
 		Addr:         "0.0.0.0:" + env.Port,
