@@ -108,6 +108,6 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result.Status = resp.StatusCode
-	result.Address = ADDRESS_KEY
+	result.Address = nodeAddr
 	return
 }
