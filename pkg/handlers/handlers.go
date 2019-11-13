@@ -4,6 +4,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -53,6 +54,13 @@ func (s *State) getHandler(in types.Input, res *types.Response) {
 	}
 }
 
+func (s *State) countHandler(in types.Input, res *types.Response) {
+	value := strconv.Itoa(s.store.NumKeys())
+
+	res.Message = msg.NumKeySuccess
+	res.Value = value
+}
+
 func (s *State) putHandler(in types.Input, res *types.Response) {
 	if in.Value == "" {
 		res.Error = msg.ValueMissing
@@ -99,4 +107,6 @@ func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)
+
+	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.countHandler))).Methods(http.MethodGet)
 }
