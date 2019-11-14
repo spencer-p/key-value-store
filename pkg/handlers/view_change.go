@@ -30,14 +30,11 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 
 	log.Printf("Received view change with addrs %v\n", view)
 
-	oldview := s.hash.Members()
-	viewIsNew := !viewEqual(oldview, view)
+	viewIsNew := s.hash.TestAndSet(view)
 	if viewIsNew {
 		log.Println("This view is new information")
-		// If this view change is new:
-		// 1. Apply it
-		// 2. Send out all our diffs
-		s.hash.Set(view)
+		// We just set a new view. We have keys that need to move to other
+		// nodes.
 		batches := s.getBatches()
 		offloaded, err := s.dispatchBatches(view, batches)
 		if err != nil {
@@ -149,14 +146,6 @@ func (s *State) applyBatch(batch []types.Entry) {
 	for _, e := range batch {
 		s.store.Set(e.Key, e.Value)
 	}
-}
-
-// viewEqual returns true iff the views are identical.
-func viewEqual(v1 []string, v2 []string) bool {
-	s1 := util.StringSet(v1)
-	s2 := util.StringSet(v2)
-
-	return util.SetEqual(s1, s2)
 }
 
 // sendBatch sends a types.Input to the target node's address.

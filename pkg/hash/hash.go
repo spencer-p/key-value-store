@@ -6,6 +6,8 @@ import (
 	"hash"
 	"hash/fnv"
 	"sync"
+
+	"github.com/spencer-p/cse138/pkg/util"
 )
 
 var (
@@ -57,4 +59,25 @@ func (m *Modulo) Set(elts []string) {
 	defer m.mtx.Unlock()
 
 	m.elts = elts
+}
+
+// Test and set performs an atomic Set operation iff the new member slice is
+// different than the old. Returns true if the member slice changed.
+func (m *Modulo) TestAndSet(elts []string) bool {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	viewIsNew := !eltsEqual(elts, m.elts)
+	if viewIsNew {
+		m.elts = elts
+	}
+	return viewIsNew
+}
+
+// eltsEqual returns true iff the elts are the same set-wise.
+func eltsEqual(e1 []string, e2 []string) bool {
+	s1 := util.StringSet(e1)
+	s2 := util.StringSet(e2)
+
+	return util.SetEqual(s1, s2)
 }
