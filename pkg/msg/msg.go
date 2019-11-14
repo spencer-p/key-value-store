@@ -6,7 +6,7 @@ const (
 	PutSuccess               = "Added successfully"
 	UpdateSuccess            = "Updated successfully"
 	GetSuccess               = "Retrieved successfully"
-	NumKeySuccess            = "Got number of keys successfully"
+	NumKeySuccess            = "Key count retrieved successfully"
 	DeleteSuccess            = "Deleted successfully"
 	ViewChangeSuccess        = "View change successful"
 	PartialViewChangeSuccess = "Partial view change successful"
