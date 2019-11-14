@@ -4,7 +4,6 @@ package handlers
 import (
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -55,10 +54,10 @@ func (s *State) getHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) countHandler(in types.Input, res *types.Response) {
-	KeyCount := strconv.Itoa(s.store.NumKeys())
+	KeyCount := s.store.NumKeys()
 
 	res.Message = msg.NumKeySuccess
-	res.Value = KeyCount
+	res.KeyCount = &KeyCount
 }
 
 func (s *State) putHandler(in types.Input, res *types.Response) {
