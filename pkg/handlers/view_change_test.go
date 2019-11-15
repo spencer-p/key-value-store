@@ -38,40 +38,6 @@ func TestDeleteBatches(t *testing.T) {
 	}
 }
 
-func TestViewEqual(t *testing.T) {
-	tests := []struct {
-		v1, v2 []string
-		want   bool
-	}{{
-		v1:   []string{"a", "b"},
-		v2:   []string{"a", "c"},
-		want: false,
-	}, {
-		v1:   []string{"a", "b"},
-		v2:   []string{"a", "b"},
-		want: true,
-	}, {
-		v1:   []string{"a", "b"},
-		v2:   []string{"b", "a"},
-		want: true,
-	}, {
-		v1:   []string{},
-		v2:   []string{"a", "b"},
-		want: false,
-	}, {
-		v1:   []string{"a", "b", "c"},
-		v2:   []string{"a", "b"},
-		want: false,
-	}}
-
-	for _, tc := range tests {
-		got := viewEqual(tc.v1, tc.v2)
-		if got != tc.want {
-			t.Errorf("For %v == %v, got %t, wanted %t", tc.v1, tc.v2, got, tc.want)
-		}
-	}
-}
-
 func ServerWithPort(port string) *http.Server {
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
