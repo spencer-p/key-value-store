@@ -1,0 +1,14 @@
+To partition keys, we will maintain an array A of n members where A[i] is the
+ith node in the view. Before any operation with a key is applied, we will
+compute j = hash(key) mod n and defer the operation to the node at address A[j].
+
+For view changes, we will
+- Test and set the view.
+- If the view was set (meaning the view is a new view):
+   - Fetch all keys that need to move
+   - To each node, send corresponding keys with the view change attached
+   - Delete all keys that the other nodes say they received
+- If this view change contains a list of keys we should store, store those keys
+- If we are the node that is starting this view change, we now fetch the key
+  count from everybody else and include it in our response.
+- Tell whoever initiated this view change that this node's work is done.
