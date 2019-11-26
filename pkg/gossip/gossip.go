@@ -3,6 +3,7 @@ package gossip
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/spencer-p/cse138/pkg/store"
 
@@ -21,12 +22,13 @@ func NewManager(s *store.Store) *Manager {
 }
 
 // gossips to other replicas periodically
-func (m *Manager) Gossip() {
+func (m *Manager) relayGossip() {
+	timer := time.NewTime(2 * time.Second)
 
 }
 
 // finds stuff in the store to send to other replicas
-func (m *Manager) gossip() {
+func (m *Manager) findGossip() {
 
 }
 
