@@ -14,7 +14,7 @@ type Manager struct {
 	store *store.Store
 }
 
-func NewManager(s map[string]string) *Manager {
+func NewManager(s *store.Store) *Manager {
 	m := &Manager{
 		store: s,
 	}
