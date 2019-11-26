@@ -11,7 +11,7 @@ import (
 
 type Manager struct {
 	// stuff that the gossip manager needs to gossip
-	store map[string]string
+	store *store.Store
 }
 
 func NewManager(s map[string]string) *Manager {
