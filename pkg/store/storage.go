@@ -4,9 +4,19 @@ import (
 	"fmt"
 	"log"
 	"sync"
+
+	"github.com/spencer-p/cse138/pkg/clock"
 )
 
 // Store represents a volatile key value store.
+
+type KeyInfo struct {
+	val string
+	vc  *clock.VectorClock
+}
+
+// TODO: update functions to use KeyInfo struct
+
 type Store struct {
 	store map[string]string
 	m     sync.RWMutex

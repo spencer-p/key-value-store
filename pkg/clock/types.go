@@ -1,4 +1,4 @@
-package causal
+package clock
 
 type Clock interface {
 	Compare(Clock) CompareResult

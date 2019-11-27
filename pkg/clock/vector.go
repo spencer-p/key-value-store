@@ -1,4 +1,4 @@
-package causal
+package clock
 
 type VectorClock map[string]uint64
 

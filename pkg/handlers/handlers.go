@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/spencer-p/cse138/pkg/gossip"
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
