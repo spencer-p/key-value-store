@@ -19,20 +19,23 @@ type Manager struct {
 	// stuff that the gossip manager needs to gossip
 	state    *store.Store
 	replicas []string
+	repFact  int
 	address  string
 }
 
-func NewManager(s *store.Store, replicas []string) *Manager {
+func NewManager(s *store.Store, replicas []string, address string, repFact int) *Manager {
 	m := &Manager{
 		state:    s,
 		replicas: replicas,
+		repFact:  repFact,
+		address:  address,
 	}
 	return m
 }
 
 // gossips to other replicas periodically
-func (m *Manager) relayGossip() {
-	jsonVector, err := json.Marshal(m.vc)
+func (m *Manager) relayGossip( /*some map buffer?*/ ) {
+	jsonVector, err := json.Marshal( /*stuff we return from find gossip*/ m.state.Store[m.address].Vec)
 
 	//defer result somewhere
 	if err != nil {
@@ -40,7 +43,7 @@ func (m *Manager) relayGossip() {
 	}
 
 	replicaPath := "/kv-store/gossip"
-	for nodeAddr, events := range len(m.vc) {
+	for _, nodeAddr := range m.replicas {
 		if nodeAddr == m.address {
 			continue
 		}
@@ -77,8 +80,8 @@ func (m *Manager) findGossip() {
 
 	for key, val := range m.state.Store {
 		// loop through key's vector clock
-		nodeClock := val.Vec[m.address]
-		for nodeAddr, count := range val.Vec {
+		nodeClock := (*val.Vec)[m.address] //is m.address supposed to be key
+		for nodeAddr, count := range *val.Vec {
 			if nodeAddr != m.address && nodeClock < count {
 				// need to gossip
 			}
@@ -95,7 +98,13 @@ func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func InitManager(r *mux.Router, repFact int, s *store.Store, replicas []string, address string) {
+	m := NewManager(s, replicas, address, repFact)
+	m.Route(r)
+}
+
 func (m *Manager) Route(r *mux.Router) {
 
+	log.Println("Received some gossip")
 	r.HandleFunc("/kv-store/gossip", m.Receive).Methods(http.MethodPut)
 }

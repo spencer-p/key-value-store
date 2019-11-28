@@ -25,9 +25,10 @@ const (
 
 type Config struct {
 	// Config VIEW and ADDRESS
-	Port    string `envconfig:"PORT" required:"true"`
-	View    string `envconfig:"VIEW" required:"true"`
-	Address string `envconfig:"ADDRESS" required:"true"`
+	Port        string `envconfig:"PORT" required:"true"`
+	View        string `envconfig:"VIEW" required:"true"`
+	Address     string `envconfig:"ADDRESS" required:"true"`
+	Replication int    `envconfig:"REPL_FACTOR" require:"true"`
 }
 
 func main() {
@@ -39,7 +40,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	handlers.InitNode(r, env.Address, strings.Split(env.View, ","))
+	handlers.InitNode(r, env.Address, env.Replication, strings.Split(env.View, ","))
 
 	srv := &http.Server{
 		Handler:      r,

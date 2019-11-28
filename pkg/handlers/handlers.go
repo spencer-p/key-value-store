@@ -81,9 +81,9 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func InitNode(r *mux.Router, addr string, view []string) {
+func InitNode(r *mux.Router, addr string, repFact int, view []string) {
 	s := NewState(addr, view)
-	s.Route(r)
+	s.Route(r, repFact)
 }
 
 func NewState(addr string, view []string) *State {
@@ -102,9 +102,9 @@ func NewState(addr string, view []string) *State {
 	return s
 }
 
-func (s *State) Route(r *mux.Router) {
+func (s *State) Route(r *mux.Router, repFact int) {
 
-	m := gossip.NewManager(s.store, s.replicas)
+	gossip.InitManager(r, repFact, s.Store, s.replicas, s.address)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
@@ -113,5 +113,4 @@ func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)
 
-	r.HandleFunc("/kv-store/gossip", m.Receiver()).Methods(http.MethodPut)
 }

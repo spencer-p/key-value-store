@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 )
 
@@ -49,8 +50,9 @@ type Input struct {
 
 // An Entry is a key value pair.
 type Entry struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key    string             `json:"key"`
+	Value  string             `json:"value"`
+	Vector *clock.VectorClock `json:"Vec,omitempty"`
 }
 
 // WrapHTTP wraps an method that processes Inputs and writes a Response as an http
