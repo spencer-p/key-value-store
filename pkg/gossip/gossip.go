@@ -60,7 +60,7 @@ func (m *Manager) relayGossip() {
 			continue
 		}
 
-		request.Header.Set("Content-Type", multiPartWriter.FormDataContentType())
+		request.Header.Set("Content-Type", "application/json")
 
 		client := &http.Client{}
 		resp, err := client.Do(request)
@@ -77,8 +77,8 @@ func (m *Manager) findGossip() {
 
 	for key, val := range m.state.Store {
 		// loop through key's vector clock
-		nodeClock := val.vc[m.address]
-		for nodeAddr, count := range val.VectorClock {
+		nodeClock := val.Vec[m.address]
+		for nodeAddr, count := range val.Vec {
 			if nodeAddr != m.address && nodeClock < count {
 				// need to gossip
 			}

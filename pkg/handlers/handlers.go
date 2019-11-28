@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/gossip"
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -15,10 +16,11 @@ import (
 )
 
 type State struct {
-	store   *store.Store
-	hash    hash.Interface
-	address string
-	cli     *http.Client
+	store    *store.Store
+	hash     hash.Interface
+	address  string
+	cli      *http.Client
+	replicas []string
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -101,6 +103,8 @@ func NewState(addr string, view []string) *State {
 }
 
 func (s *State) Route(r *mux.Router) {
+
+	m := gossip.NewManager(s.store, s.replicas)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
@@ -108,4 +112,6 @@ func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)
+
+	r.HandleFunc("/kv-store/gossip", m.Receiver()).Methods(http.MethodPut)
 }

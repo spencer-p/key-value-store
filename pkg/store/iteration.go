@@ -22,7 +22,7 @@ func (s *Store) For(body IterBody) {
 	defer s.m.Unlock()
 
 	for key, value := range s.Store {
-		ret := body(key, value)
+		ret := body(key, value.Value)
 		if ret&DELETE != 0 {
 			delete(s.Store, key)
 		}

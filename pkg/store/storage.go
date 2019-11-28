@@ -11,32 +11,33 @@ import (
 // Store represents a volatile key value store.
 
 type KeyInfo struct {
-	Value       string
-	Vec    *clock.VectorClock
+	Value string
+	Vec   *clock.VectorClock
 }
 
 // TODO: update functions to use KeyInfo struct
 
 type Store struct {
-	Store map[string]string
+	Store map[string]*KeyInfo
 	m     sync.RWMutex
 }
 
 // New constructs an empty store.
 func New() *Store {
 	return &Store{
-		Store: make(map[string]string),
+		Store: make(map[string]*KeyInfo),
 		// Note that the zero value for a mutex is unlocked.
 	}
 }
 
 // Set sets key=value and returns true iff the value replaced an old value.
-func (s *Store) Set(key, value string) bool {
+func (s *Store) Set(key, value string, vc *clock.VectorClock) bool {
 	s.m.Lock()
 	defer s.m.Unlock()
 
 	old, updating := s.Store[key]
-	s.Store[key] = value
+	s.Store[key].Value = value
+	s.Store[key].Vec = vc
 
 	log.Printf("Set %q=%q", key, value)
 	if updating {
@@ -61,8 +62,12 @@ func (s *Store) Read(key string) (string, bool) {
 	s.m.RLock()
 	defer s.m.RUnlock()
 
-	value, ok := s.Store[key]
+	value := s.Store[key].Value
 
+	var ok = false
+	if value != "" {
+		ok = true
+	}
 	log.Printf("Reading %q=%q\n", key, value)
 
 	return value, ok
