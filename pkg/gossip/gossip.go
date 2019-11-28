@@ -10,6 +10,7 @@ import (
 	"path"
 
 	"github.com/spencer-p/cse138/pkg/store"
+	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 
 	"github.com/gorilla/mux"
@@ -23,6 +24,15 @@ type Manager struct {
 	address  string
 }
 
+/*
+type GossipPayload struct {
+	senderAddr
+	key
+	value
+	senderClock
+	receiverClock
+}
+*/
 func NewManager(s *store.Store, replicas []string, address string, repFact int) *Manager {
 	m := &Manager{
 		state:    s,
@@ -36,7 +46,7 @@ func NewManager(s *store.Store, replicas []string, address string, repFact int) 
 // gossips to other replicas periodically
 func (m *Manager) relayGossip( /*some map buffer?*/ ) {
 	jsonVector, err := json.Marshal( /*stuff we return from find gossip*/ m.state.Store[m.address].Vec)
-
+	var result types.Response
 	//defer result somewhere
 	if err != nil {
 		fmt.Println(err)
@@ -70,19 +80,25 @@ func (m *Manager) relayGossip( /*some map buffer?*/ ) {
 		if err != nil {
 			log.Fatalln(err)
 		}
+		if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			log.Println("Could not parse gossip response:", err)
+		}
 
+		return
 		//write some ack response bullshit with the vector clock
 	}
 }
 
 // finds stuff in the store to send to other replicas
 func (m *Manager) findGossip() {
-
+	gossip := make(map[string]*store.KeyInfo)
 	for key, val := range m.state.Store {
 		// loop through key's vector clock
 		nodeClock := (*val.Vec)[m.address] //is m.address supposed to be key
 		for nodeAddr, count := range *val.Vec {
 			if nodeAddr != m.address && nodeClock < count {
+				gossip[key].Value = val.Value
+				gossip[key].Vec = val.Vec
 				// need to gossip
 			}
 		}
@@ -90,11 +106,16 @@ func (m *Manager) findGossip() {
 }
 
 func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
+	var in types.Input
+	//params := mux.Vars(r)
+	dec := json.NewDecoder(r.Body)
+	if r.ContentLength > 0 {
+		if err := dec.Decode(in); err != nil {
+			log.Println("Could not decode gossip JSON:", err)
+		}
+	}
 
-	// dec := json.NewDecoder(r.Body)
-	// if r.ContentLength > 0 {
-	// 	if err := dec.Dec
+	log.Println(in)
 
 }
 

@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/gossip"
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -70,7 +69,10 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	replaced := s.store.Set(in.Key, in.Value)
+	//Add one to the VC of the Key for this Node
+	updateVCCounter := (*s.store.Store[in.Key].Vec)[s.address] + 1
+	(*s.store.Store[in.Key].Vec)[s.address] = updateVCCounter
+	replaced := s.store.Set(in.Key, in.Value, s.store.Store[in.Key].Vec)
 
 	res.Replaced = &replaced
 	res.Message = msg.PutSuccess
@@ -104,7 +106,7 @@ func NewState(addr string, view []string) *State {
 
 func (s *State) Route(r *mux.Router, repFact int) {
 
-	gossip.InitManager(r, repFact, s.Store, s.replicas, s.address)
+	gossip.InitManager(r, repFact, s.store, s.replicas, s.address)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
