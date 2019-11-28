@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
@@ -19,14 +18,15 @@ import (
 
 type Manager struct {
 	// stuff that the gossip manager needs to gossip
-	state    *store.Store
+	vc       *clock.VectorClock
+	store    *store.Store
 	replicas []string
 	address  string
 }
 
 func NewManager(s *store.Store, replicas []string) *Manager {
 	m := &Manager{
-		state:    s,
+		store:    s,
 		replicas: replicas,
 	}
 	return m
@@ -62,7 +62,7 @@ func (m *Manager) relayGossip() {
 			continue
 		}
 
-		request.Header.Set("Content-Type", multiPartWriter.FormDataContentType())
+		request.Header.Set("Content-Type", "application/json")
 
 		client := &http.Client{}
 		resp, err := client.Do(request)
@@ -77,10 +77,12 @@ func (m *Manager) relayGossip() {
 // finds stuff in the store to send to other replicas
 func (m *Manager) findGossip() {
 	// loops through every key in the store
-	for key, val := range m.state.store {
+	for key, val := range m.store {
 		// loop through key's vector clock
-		for i, value := range val.vc {
-
+		for i, value := range m.store.vc {
+			if value.vc == m.store.vc {
+				//add it to the vector clock
+			}
 		}
 	}
 }

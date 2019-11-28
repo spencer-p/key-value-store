@@ -18,25 +18,26 @@ type KeyInfo struct {
 // TODO: update functions to use KeyInfo struct
 
 type Store struct {
-	store map[string]string
+	store map[string]*KeyInfo
 	m     sync.RWMutex
 }
 
 // New constructs an empty store.
 func New() *Store {
 	return &Store{
-		store: make(map[string]string),
+		store: make(map[string]*KeyInfo),
 		// Note that the zero value for a mutex is unlocked.
 	}
 }
 
 // Set sets key=value and returns true iff the value replaced an old value.
-func (s *Store) Set(key, value string) bool {
+func (s *Store) Set(key, value string, vc *clock.VectorClock) bool {
 	s.m.Lock()
 	defer s.m.Unlock()
 
 	old, updating := s.store[key]
-	s.store[key] = value
+	s.store[key].val = value
+	s.store[key].vc = vc
 
 	log.Printf("Set %q=%q", key, value)
 	if updating {
@@ -61,8 +62,12 @@ func (s *Store) Read(key string) (string, bool) {
 	s.m.RLock()
 	defer s.m.RUnlock()
 
-	value, ok := s.store[key]
+	value := s.store[key].val
 
+	var ok = false
+	if value != "" {
+		ok = true
+	}
 	log.Printf("Reading %q=%q\n", key, value)
 
 	return value, ok
