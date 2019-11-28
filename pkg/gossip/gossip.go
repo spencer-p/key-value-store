@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
 
-	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/util"
 
@@ -76,11 +74,14 @@ func (m *Manager) relayGossip() {
 
 // finds stuff in the store to send to other replicas
 func (m *Manager) findGossip() {
-	// loops through every key in the store
-	for key, val := range m.state.store {
-		// loop through key's vector clock
-		for i, value := range val.vc {
 
+	for key, val := range m.state.Store {
+		// loop through key's vector clock
+		nodeClock := val.vc[m.address]
+		for nodeAddr, count := range val.VectorClock {
+			if nodeAddr != m.address && nodeClock < count {
+				// need to gossip
+			}
 		}
 	}
 }
