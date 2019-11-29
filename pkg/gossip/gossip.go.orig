@@ -1,0 +1,177 @@
+package gossip
+
+import (
+	"bytes"
+	"encoding/json"
+	"log"
+	"net/http"
+	"net/url"
+	"path"
+
+	"github.com/spencer-p/cse138/pkg/clock"
+	"github.com/spencer-p/cse138/pkg/store"
+	"github.com/spencer-p/cse138/pkg/types"
+	"github.com/spencer-p/cse138/pkg/util"
+
+	"github.com/gorilla/mux"
+)
+
+type Manager struct {
+	// stuff that the gossip manager needs to gossip
+	state    *store.Store
+	replicas []string
+	repFact  int
+	address  string
+}
+
+type GossipPayload struct {
+<<<<<<< HEAD
+	senderAddr    string             `json:"senderAddr,omitempty"`
+	key           string             `json:"key,omitempty"`
+	value         string             `json:"value,omitempty"`
+	senderClock   *clock.VectorClock `json:"senderClock,omitempty"`
+	receiverClock *clock.VectorClock `json:"receiverClock,omitempty"`
+}
+
+=======
+	KeyVals    map[string]string
+	SenderAddr string
+}
+
+func newGossipPayload(senderAddr string) *GossipPayload {
+	gp := &GossipPayload{
+		KeyVals:    make(map[string]string),
+		SenderAddr: senderAddr,
+	}
+	return gp
+}
+
+>>>>>>> findGossip
+func NewManager(s *store.Store, replicas []string, address string, repFact int) *Manager {
+	m := &Manager{
+		state:    s,
+		replicas: replicas,
+		repFact:  repFact,
+		address:  address,
+	}
+	return m
+}
+
+// gossips to other replicas periodically
+<<<<<<< HEAD
+func (m *Manager) relayGossip(gossip *GossipPayload) {
+	jsonGossip, err := json.Marshal(gossip)
+	log.Println(jsonGossip)
+	var result types.Response
+	//defer result somewhere
+	if err != nil {
+		fmt.Println(err)
+	}
+=======
+func (m *Manager) relayGossip() {
+>>>>>>> findGossip
+
+	var result types.Response
+	replicaPath := "/kv-store/gossip"
+
+	for _, nodeAddr := range m.replicas {
+		if nodeAddr != m.address {
+			continue
+		}
+
+		gp := m.findGossip(nodeAddr)
+
+		jsonVector, err := json.Marshal(gp)
+		if err != nil {
+			log.Fatalln("Failed to marshal GossipPayload")
+		}
+
+		target, err := url.Parse(util.CorrectURL(nodeAddr))
+		if err != nil {
+			log.Println("Bad gossip address", nodeAddr)
+			continue
+		}
+		target.Path = path.Join(target.Path, replicaPath)
+
+		request, err := http.NewRequest(http.MethodPut,
+			target.String(),
+			bytes.NewBuffer(jsonGossip))
+
+		if err != nil {
+			log.Println("Failed to delivery gossip to ", nodeAddr)
+			continue
+		}
+
+		request.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}
+		resp, err := client.Do(request)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			log.Println("Could not parse gossip response:", err)
+		}
+	}
+}
+
+// finds stuff in the store to send to other replicas
+<<<<<<< HEAD
+func (m *Manager) findGossip() {
+	for key, val := range m.state.Store {
+		// loop through key's vector clock
+		nodeClock := (*val.Vec)[m.address] //is m.address supposed to be key
+		for nodeAddr, count := range *val.Vec {
+			if nodeAddr != m.address && nodeClock < count {
+				gossip := &GossipPayload{
+					key:         key,
+					value:       val.Value,
+					senderClock: val.Vec,
+				}
+				m.relayGossip(gossip)
+				break
+				// need to gossip
+			}
+=======
+func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
+	gp := newGossipPayload(m.address)
+
+	// loop through all keys in the store
+
+	for key, val := range m.state.Store {
+		nodeClock := (*val.Vec)[m.address]
+		replicaClock := (*val.Vec)[replicaAddress]
+		if nodeClock < replicaClock {
+			gp.KeyVals[key] = val.Value
+>>>>>>> findGossip
+		}
+	}
+
+	return gp
+}
+
+func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
+	var in GossipPayload
+	//params := mux.Vars(r)
+	dec := json.NewDecoder(r.Body)
+	if r.ContentLength > 0 {
+		if err := dec.Decode(&in); err != nil {
+			log.Println("Could not decode gossip JSON:", err)
+		}
+	}
+
+	log.Println("Key found", in.key)
+	log.Println(in)
+
+}
+
+func InitManager(r *mux.Router, repFact int, s *store.Store, replicas []string, address string) {
+	m := NewManager(s, replicas, address, repFact)
+	m.Route(r)
+}
+
+func (m *Manager) Route(r *mux.Router) {
+
+	log.Println("Received some gossip")
+	r.HandleFunc("/kv-store/gossip", m.Receive).Methods(http.MethodPut)
+}
