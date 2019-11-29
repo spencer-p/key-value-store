@@ -3,13 +3,11 @@ package gossip
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"path"
 
-	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
@@ -26,11 +24,16 @@ type Manager struct {
 }
 
 type GossipPayload struct {
-	senderAddr    string             `json:"senderAddr,omitempty"`
-	key           string             `json:"key,omitempty"`
-	value         string             `json:"value,omitempty"`
-	senderClock   *clock.VectorClock `json:"senderClock,omitempty"`
-	receiverClock *clock.VectorClock `json:"receiverClock,omitempty"`
+	KeyVals    map[string]string
+	SenderAddr string
+}
+
+func newGossipPayload(senderAddr string) *GossipPayload {
+	gp := &GossipPayload{
+		KeyVals:    make(map[string]string),
+		SenderAddr: senderAddr,
+	}
+	return gp
 }
 
 func NewManager(s *store.Store, replicas []string, address string, repFact int) *Manager {
@@ -45,19 +48,23 @@ func NewManager(s *store.Store, replicas []string, address string, repFact int) 
 
 // gossips to other replicas periodically
 func (m *Manager) relayGossip(gossip *GossipPayload) {
-	jsonGossip, err := json.Marshal(gossip)
-	log.Println(jsonGossip)
-	var result types.Response
 	//defer result somewhere
-	if err != nil {
-		fmt.Println(err)
-	}
-
+	var result types.Response
 	replicaPath := "/kv-store/gossip"
+
 	for _, nodeAddr := range m.replicas {
-		if nodeAddr == m.address {
+		if nodeAddr != m.address {
 			continue
 		}
+
+		gp := m.findGossip(nodeAddr)
+
+		jsonGossip, err := json.Marshal(gp)
+		log.Println(jsonGossip)
+		if err != nil {
+			log.Fatalln("Failed to marshal GossipPayload")
+		}
+
 		target, err := url.Parse(util.CorrectURL(nodeAddr))
 		if err != nil {
 			log.Println("Bad gossip address", nodeAddr)
@@ -84,30 +91,23 @@ func (m *Manager) relayGossip(gossip *GossipPayload) {
 		if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			log.Println("Could not parse gossip response:", err)
 		}
-
-		return
-		//write some ack response bullshit with the vector clock
 	}
 }
 
 // finds stuff in the store to send to other replicas
-func (m *Manager) findGossip() {
+func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
+	gp := newGossipPayload(m.address)
+
+	// loop through all keys in the store
+
 	for key, val := range m.state.Store {
-		// loop through key's vector clock
-		nodeClock := (*val.Vec)[m.address] //is m.address supposed to be key
-		for nodeAddr, count := range *val.Vec {
-			if nodeAddr != m.address && nodeClock < count {
-				gossip := &GossipPayload{
-					key:         key,
-					value:       val.Value,
-					senderClock: val.Vec,
-				}
-				m.relayGossip(gossip)
-				break
-				// need to gossip
-			}
+		nodeClock := (*val.Vec)[m.address]
+		replicaClock := (*val.Vec)[replicaAddress]
+		if nodeClock < replicaClock {
+			gp.KeyVals[key] = val.Value
 		}
 	}
+	return gp
 }
 
 func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +120,7 @@ func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Println("Key found", in.key)
+	//log.Println("Key found", in.)
 	log.Println(in)
 
 }
