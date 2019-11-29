@@ -3,7 +3,6 @@ package gossip
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -24,15 +23,19 @@ type Manager struct {
 	address  string
 }
 
-/*
 type GossipPayload struct {
-	senderAddr
-	key
-	value
-	senderClock
-	receiverClock
+	KeyVals    map[string]string
+	SenderAddr string
 }
-*/
+
+func newGossipPayload(senderAddr string) *GossipPayload {
+	gp := &GossipPayload{
+		KeyVals:    make(map[string]string),
+		SenderAddr: senderAddr,
+	}
+	return gp
+}
+
 func NewManager(s *store.Store, replicas []string, address string, repFact int) *Manager {
 	m := &Manager{
 		state:    s,
@@ -44,19 +47,23 @@ func NewManager(s *store.Store, replicas []string, address string, repFact int) 
 }
 
 // gossips to other replicas periodically
-func (m *Manager) relayGossip( /*some map buffer?*/ ) {
-	jsonVector, err := json.Marshal( /*stuff we return from find gossip*/ m.state.Store[m.address].Vec)
-	var result types.Response
-	//defer result somewhere
-	if err != nil {
-		fmt.Println(err)
-	}
+func (m *Manager) relayGossip() {
 
+	var result types.Response
 	replicaPath := "/kv-store/gossip"
+
 	for _, nodeAddr := range m.replicas {
-		if nodeAddr == m.address {
+		if nodeAddr != m.address {
 			continue
 		}
+
+		gp := m.findGossip(nodeAddr)
+
+		jsonVector, err := json.Marshal(gp)
+		if err != nil {
+			log.Fatalln("Failed to marshal GossipPayload")
+		}
+
 		target, err := url.Parse(util.CorrectURL(nodeAddr))
 		if err != nil {
 			log.Println("Bad gossip address", nodeAddr)
@@ -83,26 +90,24 @@ func (m *Manager) relayGossip( /*some map buffer?*/ ) {
 		if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			log.Println("Could not parse gossip response:", err)
 		}
-
-		return
-		//write some ack response bullshit with the vector clock
 	}
 }
 
 // finds stuff in the store to send to other replicas
-func (m *Manager) findGossip() {
-	gossip := make(map[string]*store.KeyInfo)
+func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
+	gp := newGossipPayload(m.address)
+
+	// loop through all keys in the store
+
 	for key, val := range m.state.Store {
-		// loop through key's vector clock
-		nodeClock := (*val.Vec)[m.address] //is m.address supposed to be key
-		for nodeAddr, count := range *val.Vec {
-			if nodeAddr != m.address && nodeClock < count {
-				gossip[key].Value = val.Value
-				gossip[key].Vec = val.Vec
-				// need to gossip
-			}
+		nodeClock := (*val.Vec)[m.address]
+		replicaClock := (*val.Vec)[replicaAddress]
+		if nodeClock < replicaClock {
+			gp.KeyVals[key] = val.Value
 		}
 	}
+
+	return gp
 }
 
 func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
