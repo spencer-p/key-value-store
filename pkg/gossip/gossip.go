@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
@@ -24,15 +25,14 @@ type Manager struct {
 	address  string
 }
 
-/*
 type GossipPayload struct {
-	senderAddr
-	key
-	value
-	senderClock
-	receiverClock
+	senderAddr    string             `json:"senderAddr,omitempty"`
+	key           string             `json:"key,omitempty"`
+	value         string             `json:"value,omitempty"`
+	senderClock   *clock.VectorClock `json:"senderClock,omitempty"`
+	receiverClock *clock.VectorClock `json:"receiverClock,omitempty"`
 }
-*/
+
 func NewManager(s *store.Store, replicas []string, address string, repFact int) *Manager {
 	m := &Manager{
 		state:    s,
@@ -91,14 +91,16 @@ func (m *Manager) relayGossip( /*some map buffer?*/ ) {
 
 // finds stuff in the store to send to other replicas
 func (m *Manager) findGossip() {
-	gossip := make(map[string]*store.KeyInfo)
+	gossip := &GossipPayload{}
 	for key, val := range m.state.Store {
 		// loop through key's vector clock
 		nodeClock := (*val.Vec)[m.address] //is m.address supposed to be key
 		for nodeAddr, count := range *val.Vec {
 			if nodeAddr != m.address && nodeClock < count {
-				gossip[key].Value = val.Value
-				gossip[key].Vec = val.Vec
+				gossip.key = key
+				gossip.value = val.Value
+				gossip.senderClock = val.Vec
+				break
 				// need to gossip
 			}
 		}
