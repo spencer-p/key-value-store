@@ -1,4 +1,4 @@
-package causal
+package clock
 
 import (
 	"testing"
