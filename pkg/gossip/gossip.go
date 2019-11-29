@@ -53,7 +53,7 @@ func (m *Manager) relayGossip() {
 	replicaPath := "/kv-store/gossip"
 
 	for _, nodeAddr := range m.replicas {
-		if nodeAddr != m.address {
+		if nodeAddr == m.address {
 			continue
 		}
 
