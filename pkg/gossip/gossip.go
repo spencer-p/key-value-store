@@ -23,17 +23,30 @@ type Manager struct {
 	address  string
 }
 
+type KeyData struct {
+	Value       string
+	SenderClock uint64
+}
+
 type GossipPayload struct {
-	KeyVals    map[string]string
+	KeyVals    map[string]*KeyData
 	SenderAddr string
 }
 
 func newGossipPayload(senderAddr string) *GossipPayload {
 	gp := &GossipPayload{
-		KeyVals:    make(map[string]string),
+		KeyVals:    make(map[string]*KeyData),
 		SenderAddr: senderAddr,
 	}
 	return gp
+}
+
+func newKeyData(value string, clock uint64) *KeyData {
+	kd := &KeyData{
+		Value:       value,
+		SenderClock: clock,
+	}
+	return kd
 }
 
 func NewManager(s *store.Store, replicas []string, address string, repFact int) *Manager {
@@ -98,12 +111,12 @@ func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 	gp := newGossipPayload(m.address)
 
 	// loop through all keys in the store
-
 	for key, val := range m.state.Store {
 		nodeClock := (*val.Vec)[m.address]
 		replicaClock := (*val.Vec)[replicaAddress]
-		if nodeClock < replicaClock {
-			gp.KeyVals[key] = val.Value
+		if nodeClock > replicaClock {
+			kd := newKeyData(val.Value, nodeClock)
+			gp.KeyVals[key] = kd
 		}
 	}
 
