@@ -69,10 +69,7 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	//Add one to the VC of the Key for this Node
-	updateVCCounter := (*s.store.Store[in.Key].Vec)[s.address] + 1
-	(*s.store.Store[in.Key].Vec)[s.address] = updateVCCounter
-	replaced := s.store.Set(in.Key, in.Value, s.store.Store[in.Key].Vec)
+	replaced := s.store.Set(in.Key, in.Value, s.address)
 
 	res.Replaced = &replaced
 	res.Message = msg.PutSuccess

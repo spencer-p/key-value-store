@@ -144,7 +144,7 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 
 func (s *State) applyBatch(batch []types.Entry) {
 	for _, e := range batch {
-		s.store.Set(e.Key, e.Value, s.store.Store[e.Key].Vec)
+		s.store.Set(e.Key, e.Value, s.address)
 	}
 }
 

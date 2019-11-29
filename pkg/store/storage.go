@@ -15,11 +15,16 @@ type KeyInfo struct {
 	Vec   *clock.VectorClock
 }
 
-// TODO: update functions to use KeyInfo struct
-
 type Store struct {
 	Store map[string]*KeyInfo
 	m     sync.RWMutex
+}
+
+func NewKeyInfo(value string, clock *clock.VectorClock) *KeyInfo {
+	return &KeyInfo{
+		Value: value,
+		Vec:   clock,
+	}
 }
 
 // New constructs an empty store.
@@ -31,17 +36,24 @@ func New() *Store {
 }
 
 // Set sets key=value and returns true iff the value replaced an old value.
-func (s *Store) Set(key, value string, vc *clock.VectorClock) bool {
+func (s *Store) Set(key, value, address string) bool {
 	s.m.Lock()
 	defer s.m.Unlock()
 
 	old, updating := s.Store[key]
-	s.Store[key].Value = value
-	s.Store[key].Vec = vc
 
-	log.Printf("Set %q=%q", key, value)
 	if updating {
-		log.Printf("Old value was %q", old)
+		s.Store[key].Value = value
+		s.Store[key].Vec.Increment(address)
+
+		log.Printf("Set %q=%q", key, value)
+		log.Printf("Old value was %q", old.Value)
+	} else {
+		// new key, create KeyInfo object
+		vec := make(clock.VectorClock)
+		vec[address] = 1
+		keyInfo := NewKeyInfo(value, &vec)
+		s.Store[key] = keyInfo
 	}
 
 	return updating

@@ -125,17 +125,17 @@ func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 
 func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 	var in GossipPayload
-	//params := mux.Vars(r)
 	dec := json.NewDecoder(r.Body)
 	if r.ContentLength > 0 {
 		if err := dec.Decode(&in); err != nil {
 			log.Println("Could not decode gossip JSON:", err)
 		}
 	}
-
-	//log.Println("Key found", in.)
 	log.Println(in)
 
+	// for key, val := range in.KeyVals {
+	// 	m.state.Set(key, val.Value, m.state.
+	// }
 }
 
 func InitManager(r *mux.Router, repFact int, s *store.Store, replicas []string, address string) {
