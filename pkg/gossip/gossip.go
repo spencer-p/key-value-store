@@ -44,8 +44,9 @@ func NewManager(s *store.Store, replicas []string, address string, repFact int) 
 }
 
 // gossips to other replicas periodically
-func (m *Manager) relayGossip( /*some map buffer?*/ ) {
-	jsonVector, err := json.Marshal( /*stuff we return from find gossip*/ m.state.Store[m.address].Vec)
+func (m *Manager) relayGossip(gossip *GossipPayload) {
+	jsonGossip, err := json.Marshal(gossip)
+	log.Println(jsonGossip)
 	var result types.Response
 	//defer result somewhere
 	if err != nil {
@@ -66,7 +67,7 @@ func (m *Manager) relayGossip( /*some map buffer?*/ ) {
 
 		request, err := http.NewRequest(http.MethodPut,
 			target.String(),
-			bytes.NewBuffer(jsonVector))
+			bytes.NewBuffer(jsonGossip))
 
 		if err != nil {
 			log.Println("Failed to delivery gossip to ", nodeAddr)
@@ -91,15 +92,17 @@ func (m *Manager) relayGossip( /*some map buffer?*/ ) {
 
 // finds stuff in the store to send to other replicas
 func (m *Manager) findGossip() {
-	gossip := &GossipPayload{}
 	for key, val := range m.state.Store {
 		// loop through key's vector clock
 		nodeClock := (*val.Vec)[m.address] //is m.address supposed to be key
 		for nodeAddr, count := range *val.Vec {
 			if nodeAddr != m.address && nodeClock < count {
-				gossip.key = key
-				gossip.value = val.Value
-				gossip.senderClock = val.Vec
+				gossip := &GossipPayload{
+					key:         key,
+					value:       val.Value,
+					senderClock: val.Vec,
+				}
+				m.relayGossip(gossip)
 				break
 				// need to gossip
 			}
@@ -108,15 +111,16 @@ func (m *Manager) findGossip() {
 }
 
 func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
-	var in types.Input
+	var in GossipPayload
 	//params := mux.Vars(r)
 	dec := json.NewDecoder(r.Body)
 	if r.ContentLength > 0 {
-		if err := dec.Decode(in); err != nil {
+		if err := dec.Decode(&in); err != nil {
 			log.Println("Could not decode gossip JSON:", err)
 		}
 	}
 
+	log.Println("Key found", in.key)
 	log.Println(in)
 
 }
