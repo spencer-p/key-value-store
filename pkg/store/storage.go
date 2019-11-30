@@ -21,10 +21,14 @@ type Store struct {
 	m        sync.RWMutex
 }
 
-func NewKeyInfo(value string, clock *clock.VectorClock) *KeyInfo {
+func NewKeyInfo(value string, replicas []string) *KeyInfo {
+	clock := make(clock.VectorClock)
+	for _, nodeAddr := range replicas {
+		clock[nodeAddr] = 0
+	}
 	return &KeyInfo{
 		Value: value,
-		Vec:   clock,
+		Vec:   &clock,
 	}
 }
 
@@ -36,6 +40,46 @@ func New() *Store {
 	}
 }
 
+// set gossip applies the incoming gossip
+func (s *Store) SetGossip(key, address, senderAddr string, senderInfo *KeyInfo) {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	old, updating := s.Store[key]
+
+	// if key is up to date in store, don't apply gossip
+	if updating && (*senderInfo.Vec)[senderAddr] <= (*s.Store[key].Vec)[address] {
+		return
+	}
+
+	if updating {
+		s.Store[key].Value = senderInfo.Value
+
+		log.Printf("Set %q=%q from gossip", key, s.Store[key].Value)
+		log.Printf("Old value was %q", old.Value)
+	} else {
+		// key DNE in receiver's store
+		keyInfo := NewKeyInfo(senderInfo.Value, s.Replicas)
+		s.Store[key] = keyInfo
+
+		log.Printf("Set %q=%q from gossip", key, s.Store[key].Value)
+	}
+
+	// merge the sender's vector clock into the receiving node's vector clock
+	for nodeAddr, clock := range *s.Store[key].Vec {
+		if nodeAddr == address {
+			continue
+		}
+		senderClock := (*senderInfo.Vec)[nodeAddr]
+		if clock < senderClock {
+			(*s.Store[key].Vec)[nodeAddr] = senderClock
+		}
+	}
+	(*s.Store[key].Vec)[address] = (*senderInfo.Vec)[senderAddr]
+
+	return
+}
+
 // Set sets key=value and returns true iff the value replaced an old value.
 func (s *Store) Set(key, value, address string) bool {
 	s.m.Lock()
@@ -45,22 +89,17 @@ func (s *Store) Set(key, value, address string) bool {
 
 	if updating {
 		s.Store[key].Value = value
-		s.Store[key].Vec.Increment(address)
 
 		log.Printf("Set %q=%q", key, value)
 		log.Printf("Old value was %q", old.Value)
 	} else {
-		// new key, create KeyInfo object
-		vec := make(clock.VectorClock)
-		for _, nodeAddr := range s.Replicas {
-			if nodeAddr != address {
-				vec[nodeAddr] = 0
-			}
-		}
-		vec[address] = 1
-		keyInfo := NewKeyInfo(value, &vec)
+		// new key, create KeyInfo object, VectorClock starts at 0 for all nodes
+		keyInfo := NewKeyInfo(value, s.Replicas)
 		s.Store[key] = keyInfo
+
+		log.Printf("Set %q=%q", key, value)
 	}
+	s.Store[key].Vec.Increment(address)
 
 	return updating
 }

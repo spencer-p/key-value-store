@@ -24,30 +24,17 @@ type Manager struct {
 	address  string
 }
 
-type KeyData struct {
-	Value       string
-	SenderClock uint64
-}
-
 type GossipPayload struct {
-	KeyVals    map[string]*KeyData
+	KeyVals    map[string]*store.KeyInfo
 	SenderAddr string
 }
 
 func newGossipPayload(senderAddr string) *GossipPayload {
 	gp := &GossipPayload{
-		KeyVals:    make(map[string]*KeyData),
+		KeyVals:    make(map[string]*store.KeyInfo),
 		SenderAddr: senderAddr,
 	}
 	return gp
-}
-
-func newKeyData(value string, clock uint64) *KeyData {
-	kd := &KeyData{
-		Value:       value,
-		SenderClock: clock,
-	}
-	return kd
 }
 
 func NewManager(s *store.Store, address string, repFact int) *Manager {
@@ -116,8 +103,7 @@ func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 		nodeClock := (*val.Vec)[m.address]
 		replicaClock := (*val.Vec)[replicaAddress]
 		if nodeClock > replicaClock {
-			kd := newKeyData(val.Value, nodeClock)
-			gp.KeyVals[key] = kd
+			gp.KeyVals[key] = val
 		}
 	}
 	return gp
@@ -133,9 +119,10 @@ func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Println(in)
 
-	// for key, val := range in.KeyVals {
-	// 	m.state.Set(key, val.Value, m.state.
-	// }
+	// loop through key-value pairs that were sent and apply updates
+	for key, val := range in.KeyVals {
+		m.state.SetGossip(key, m.address, in.SenderAddr, val)
+	}
 }
 
 func (m *Manager) Gossip(ticker *time.Ticker) {
