@@ -73,7 +73,7 @@ func (m *Manager) relayGossip() {
 		gp := m.findGossip(nodeAddr)
 
 		jsonGossip, err := json.Marshal(gp)
-		log.Println(jsonGossip)
+		log.Println("Gossip payload:", jsonGossip)
 		if err != nil {
 			log.Fatalln("Failed to marshal GossipPayload")
 		}
@@ -140,6 +140,8 @@ func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 
 func (m *Manager) Gossip(ticker *time.Ticker) {
 	for _ = range ticker.C {
+		t := time.Now()
+		log.Println("Relaying gossip at", t)
 		m.relayGossip()
 	}
 }
