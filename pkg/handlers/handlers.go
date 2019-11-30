@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/spencer-p/cse138/pkg/gossip"
+	//"github.com/spencer-p/cse138/pkg/gossip"
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
@@ -15,11 +15,10 @@ import (
 )
 
 type State struct {
-	store    *store.Store
-	hash     hash.Interface
-	address  string
-	cli      *http.Client
-	replicas []string
+	Store   *store.Store
+	hash    hash.Interface
+	address string
+	cli     *http.Client
 }
 
 func (s *State) deleteHandler(in types.Input, res *types.Response) {
@@ -29,10 +28,10 @@ func (s *State) deleteHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	_, ok := s.store.Read(in.Key)
+	_, ok := s.Store.Read(in.Key)
 	res.Exists = &ok
 
-	s.store.Delete(in.Key)
+	s.Store.Delete(in.Key)
 
 	if !ok {
 		res.Status = http.StatusNotFound
@@ -43,7 +42,7 @@ func (s *State) deleteHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) getHandler(in types.Input, res *types.Response) {
-	value, exists := s.store.Read(in.Key)
+	value, exists := s.Store.Read(in.Key)
 
 	res.Exists = &exists
 	if exists {
@@ -56,7 +55,7 @@ func (s *State) getHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) countHandler(in types.Input, res *types.Response) {
-	KeyCount := s.store.NumKeys()
+	KeyCount := s.Store.NumKeys()
 
 	res.Message = msg.NumKeySuccess
 	res.KeyCount = &KeyCount
@@ -69,7 +68,7 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	replaced := s.store.Set(in.Key, in.Value, s.address)
+	replaced := s.Store.Set(in.Key, in.Value, s.address)
 
 	res.Replaced = &replaced
 	res.Message = msg.PutSuccess
@@ -80,14 +79,16 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func InitNode(r *mux.Router, addr string, repFact int, view []string) {
+func InitNode(r *mux.Router, addr string, repFact int, view []string) *State {
 	s := NewState(addr, view)
 	s.Route(r, repFact)
+
+	return s
 }
 
 func NewState(addr string, view []string) *State {
 	s := &State{
-		store:   store.New(),
+		Store:   store.New(),
 		hash:    hash.NewModulo(),
 		address: addr,
 		cli: &http.Client{
@@ -103,7 +104,6 @@ func NewState(addr string, view []string) *State {
 
 func (s *State) Route(r *mux.Router, repFact int) {
 
-	gossip.InitManager(r, repFact, s.store, s.replicas, s.address)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 

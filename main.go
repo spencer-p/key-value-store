@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	//"github.com/spencer-p/cse138/pkg/gossip"
+	"github.com/spencer-p/cse138/pkg/gossip"
 	"github.com/spencer-p/cse138/pkg/handlers"
 	"github.com/spencer-p/cse138/pkg/util"
 
@@ -40,8 +40,9 @@ func main() {
 
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	handlers.InitNode(r, env.Address, env.Replication, strings.Split(env.View, ","))
+	s := handlers.InitNode(r, env.Address, env.Replication, strings.Split(env.View, ","))
 
+	gossip.NewManager(s.Store, env.Address, env.Replication)
 	srv := &http.Server{
 		Handler:      r,
 		Addr:         "0.0.0.0:" + env.Port,

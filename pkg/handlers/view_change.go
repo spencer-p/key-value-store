@@ -65,7 +65,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 // returns them.
 func (s *State) getBatches() map[string][]types.Entry {
 	batches := make(map[string][]types.Entry)
-	s.store.For(func(key, value string) store.IterAction {
+	s.Store.For(func(key, value string) store.IterAction {
 		target, err := s.hash.Get(key)
 		if err != nil {
 			log.Printf("Invalid key %q=%q: %v. Dropping.\n", key, value, err)
@@ -86,7 +86,7 @@ func (s *State) getBatches() map[string][]types.Entry {
 func (s *State) deleteEntries(entries []types.Entry) {
 	log.Println("Deleting", len(entries), "offloaded keys")
 	for i := range entries {
-		s.store.Delete(entries[i].Key)
+		s.Store.Delete(entries[i].Key)
 	}
 }
 
@@ -144,7 +144,7 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 
 func (s *State) applyBatch(batch []types.Entry) {
 	for _, e := range batch {
-		s.store.Set(e.Key, e.Value, s.address)
+		s.Store.Set(e.Key, e.Value, s.address)
 	}
 }
 
@@ -199,7 +199,7 @@ func (s *State) getKeyCounts(view []string) []types.Shard {
 
 			// Don't make a request if it's just ourselves
 			if addr == s.address {
-				shard.KeyCount = s.store.NumKeys()
+				shard.KeyCount = s.Store.NumKeys()
 				return
 			}
 
