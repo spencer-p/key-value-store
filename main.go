@@ -42,7 +42,11 @@ func main() {
 	r.Use(util.WithLog)
 	s := handlers.InitNode(r, env.Address, env.Replication, strings.Split(env.View, ","))
 
-	gossip.NewManager(s.Store, env.Address, env.Replication)
+	m := gossip.NewManager(s.Store, env.Address, env.Replication)
+	ticker := time.NewTicker(2000 * time.Millisecond)
+	go m.Gossip(ticker)
+
+	m.Route(r)
 	srv := &http.Server{
 		Handler:      r,
 		Addr:         "0.0.0.0:" + env.Port,

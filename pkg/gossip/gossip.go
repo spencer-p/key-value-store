@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"time"
 
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
@@ -49,23 +50,22 @@ func newKeyData(value string, clock uint64) *KeyData {
 	return kd
 }
 
-func NewManager(s *store.Store, replicas []string, address string, repFact int) *Manager {
+func NewManager(s *store.Store, address string, repFact int) *Manager {
 	m := &Manager{
-		state:    s,
-		replicas: replicas,
-		repFact:  repFact,
-		address:  address,
+		state:   s,
+		repFact: repFact,
+		address: address,
 	}
 	return m
 }
 
 // gossips to other replicas periodically
-func (m *Manager) relayGossip(gossip *GossipPayload) {
+func (m *Manager) relayGossip() {
 	//defer result somewhere
 	var result types.Response
 	replicaPath := "/kv-store/gossip"
 
-	for _, nodeAddr := range m.replicas {
+	for _, nodeAddr := range m.state.Replicas {
 		if nodeAddr == m.address {
 			continue
 		}
@@ -138,9 +138,10 @@ func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 	// }
 }
 
-func InitManager(r *mux.Router, repFact int, s *store.Store, replicas []string, address string) {
-	m := NewManager(s, replicas, address, repFact)
-	m.Route(r)
+func (m *Manager) Gossip(ticker *time.Ticker) {
+	for _ = range ticker.C {
+		m.relayGossip()
+	}
 }
 
 func (m *Manager) Route(r *mux.Router) {

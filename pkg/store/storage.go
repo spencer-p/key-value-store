@@ -17,7 +17,7 @@ type KeyInfo struct {
 
 type Store struct {
 	Store    map[string]*KeyInfo
-	replicas []string
+	Replicas []string
 	m        sync.RWMutex
 }
 
@@ -52,7 +52,7 @@ func (s *Store) Set(key, value, address string) bool {
 	} else {
 		// new key, create KeyInfo object
 		vec := make(clock.VectorClock)
-		for _, nodeAddr := range s.replicas {
+		for _, nodeAddr := range s.Replicas {
 			if nodeAddr != address {
 				vec[nodeAddr] = 0
 			}
