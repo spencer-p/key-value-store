@@ -36,17 +36,35 @@ func main() {
 	envconfig.MustProcess("", &env)
 	log.Printf("Configured: %+v\n", env)
 
-	// Create a mux and route handlers
+	view := strings.Split(env.View, ",")
+	var replicas []string
+	seen := false
+	for _, nodeAddr := range view {
+		if len(replicas) == env.Replication {
+			if seen {
+				break
+			} else {
+				replicas = nil
+			}
+		}
+		if nodeAddr == env.Address {
+			seen = true
+		}
+		replicas = append(replicas, nodeAddr)
+	}
+	log.Println("Replica Addresses:", replicas)
 
+	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	s := handlers.InitNode(r, env.Address, env.Replication, strings.Split(env.View, ","))
+	s := handlers.InitNode(r, env.Address, env.Replication, view)
 
-	m := gossip.NewManager(s.Store, env.Address, env.Replication)
+	m := gossip.NewManager(s.Store, env.Address, env.Replication, replicas)
 	ticker := time.NewTicker(2000 * time.Millisecond)
 	go m.Gossip(ticker)
 
 	m.Route(r)
+
 	srv := &http.Server{
 		Handler:      r,
 		Addr:         "0.0.0.0:" + env.Port,

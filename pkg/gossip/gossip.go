@@ -37,11 +37,12 @@ func newGossipPayload(senderAddr string) *GossipPayload {
 	return gp
 }
 
-func NewManager(s *store.Store, address string, repFact int) *Manager {
+func NewManager(s *store.Store, address string, repFact int, replicas []string) *Manager {
 	m := &Manager{
-		state:   s,
-		repFact: repFact,
-		address: address,
+		state:    s,
+		replicas: replicas,
+		repFact:  repFact,
+		address:  address,
 	}
 	return m
 }
@@ -52,6 +53,7 @@ func (m *Manager) relayGossip() {
 	var result types.Response
 	replicaPath := "/kv-store/gossip"
 
+	log.Println("Relay Gossip")
 	for _, nodeAddr := range m.state.Replicas {
 		if nodeAddr == m.address {
 			continue
@@ -98,6 +100,7 @@ func (m *Manager) relayGossip() {
 func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 	gp := newGossipPayload(m.address)
 
+	log.Println("Find Gossip")
 	// loop through all keys in the store
 	for key, val := range m.state.Store {
 		nodeClock := (*val.Vec)[m.address]
@@ -110,6 +113,7 @@ func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 }
 
 func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
+	log.Println("Received some gossip")
 	var in GossipPayload
 	dec := json.NewDecoder(r.Body)
 	if r.ContentLength > 0 {
@@ -127,14 +131,13 @@ func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 
 func (m *Manager) Gossip(ticker *time.Ticker) {
 	for _ = range ticker.C {
-		t := time.Now()
-		log.Println("Relaying gossip at", t)
+		// t := time.Now()
+		// log.Println("Relaying gossip at")
 		m.relayGossip()
 	}
 }
 
 func (m *Manager) Route(r *mux.Router) {
 
-	log.Println("Received some gossip")
 	r.HandleFunc("/kv-store/gossip", m.Receive).Methods(http.MethodPut)
 }
