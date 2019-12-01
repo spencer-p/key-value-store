@@ -49,7 +49,11 @@ func (a VectorClock) Compare(c Clock) CompareResult {
 }
 
 func (a VectorClock) Increment(k string) {
-	a[k] += 1
+	cur, ok := a[k]
+	if !ok {
+		cur = 0
+	}
+	a[k] = cur + 1
 }
 
 func (a VectorClock) Copy() Clock {
