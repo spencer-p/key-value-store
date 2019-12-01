@@ -42,6 +42,11 @@ func (s *Store) Write(ctx context.Context, tcausal clock.VectorClock, key, value
 
 blocker:
 	for {
+		if len(tcausal) == 0 {
+			log.Println("empty context. advancing history")
+			tcausal = s.vc
+		}
+
 		switch tcausal.Compare(s.vc) {
 		case clock.NoRelation:
 			log.Printf("no compare between %v and %v\n", tcausal, s.vc)
