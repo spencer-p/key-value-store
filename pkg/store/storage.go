@@ -37,33 +37,26 @@ func (s *Store) Write(ctx context.Context, tcausal clock.VectorClock, key, value
 
 	log.Println("for", key, "get write mtx..")
 	s.m.Lock()
-	log.Println("for", key, "got it")
 	defer s.m.Unlock()
+	log.Println("for", key, "got it")
 
-blocker:
+	fromOtherNode := false
+	otherNode := ""
+
 	for {
 		if len(tcausal) == 0 {
-			log.Println("empty context. advancing history")
+			log.Println("empty context. advancing requester's history")
 			tcausal = s.vc
+			break
+		} else if comp := tcausal.Compare(s.vc); comp == clock.Equal {
+			log.Printf("can apply since %v == %v", tcausal, s.vc)
+			break
+		} else if fromOtherNode, otherNode = tcausal.OneUpExcept(s.addr, s.vc); fromOtherNode {
+			log.Printf("can apply since %v +1 == %v", tcausal, s.vc)
+			break
 		}
 
-		switch tcausal.Compare(s.vc) {
-		case clock.NoRelation:
-			log.Printf("no compare between %v and %v\n", tcausal, s.vc)
-			// TODO
-			log.Println("ignoring no cmp.")
-			return
-		case clock.Less:
-			log.Printf("incoming < current, ignoring: %v < %v", tcausal, s.vc)
-			return
-		case clock.Equal:
-			log.Printf("can apply since %v = %v\n", tcausal, s.vc)
-			break blocker // can apply
-		case clock.Greater: //nop
-			log.Printf("waiting for more events since %v > %v", tcausal, s.vc)
-		}
-
-		log.Println(key, "is waiting")
+		log.Println(key, "is waiting with clock", tcausal)
 		s.vcCond.Wait()
 		log.Println(key, "got a wakeup")
 	}
@@ -72,10 +65,14 @@ blocker:
 	s.store[key] = value
 	committed = true
 	s.vc.Increment(s.addr)
+	if fromOtherNode {
+		s.vc.Increment(otherNode)
+	}
+
 	currentClock = s.vc
 	s.vc = currentClock
 
-	log.Println("committed", key)
+	log.Println("committed", key, "and the clock is", s.vc)
 
 	s.vcCond.Broadcast()
 	return

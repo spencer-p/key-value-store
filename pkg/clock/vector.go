@@ -48,6 +48,36 @@ func (a VectorClock) Compare(c Clock) CompareResult {
 	return NoRelation
 }
 
+// OneUp returns true if a is b plus one for only one key, which is returned as the second argument.
+// The values for the key in self are completely ignored.
+func (a VectorClock) OneUpExcept(self string, b VectorClock) (bool, string) {
+	oneupkey := ""
+	for k := range allKeys(a, b) {
+		// Skip self
+		if k == self {
+			continue
+		}
+
+		// Add defaults for missing values
+		if _, ok := a[k]; !ok {
+			a[k] = 0
+		}
+		if _, ok := b[k]; !ok {
+			b[k] = 0
+		}
+
+		// Test oneup property
+		if a[k] == b[k]+1 {
+			if oneupkey != "" {
+				return false, ""
+			}
+			oneupkey = k
+		}
+	}
+
+	return oneupkey != "", oneupkey
+}
+
 func (a VectorClock) Increment(k string) {
 	cur, ok := a[k]
 	if !ok {
