@@ -1,7 +1,7 @@
 package store
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -9,10 +9,20 @@ import (
 	"github.com/spencer-p/cse138/pkg/clock"
 )
 
+var (
+	ErrCannotApply = errors.New("Cannot apply operation")
+)
+
+type Entry struct {
+	Value   string
+	Clock   clock.VectorClock
+	Deleted bool
+}
+
 // Store represents a volatile key value store.
 type Store struct {
 	addr   string
-	store  map[string]string
+	store  map[string]Entry
 	m      *sync.RWMutex
 	vc     clock.VectorClock
 	vcCond *sync.Cond
@@ -23,109 +33,97 @@ func New(selfAddr string) *Store {
 	var mtx sync.RWMutex
 	return &Store{
 		addr:   selfAddr,
-		store:  make(map[string]string),
+		store:  make(map[string]Entry),
 		m:      &mtx,
 		vc:     clock.VectorClock{},
 		vcCond: sync.NewCond(&mtx),
 	}
 }
 
-func (s *Store) Write(ctx context.Context, tcausal clock.VectorClock, key, value string) (
-	committed bool,
+func (s *Store) Write(tcausal clock.VectorClock, fromClient bool, key, value string) (
+	err error,
 	replaced bool,
 	currentClock clock.VectorClock) {
 
-	log.Println("for", key, "get write mtx..")
+	// Acquire access to the store
 	s.m.Lock()
 	defer s.m.Unlock()
-	log.Println("for", key, "got it")
 
-	fromOtherNode := false
-	otherNode := ""
+	if fromClient {
+		return s.writeClient(tcausal, key, value)
+	} else {
+		err = ErrCannotApply
+		return
+	}
+}
 
-	for {
-		if len(tcausal) == 0 {
-			log.Println("empty context. advancing requester's history")
-			tcausal = s.vc
-			break
-		} else if comp := tcausal.Compare(s.vc); comp == clock.Equal {
-			log.Printf("can apply since %v == %v", tcausal, s.vc)
-			break
-		} else if fromOtherNode, otherNode = tcausal.OneUpExcept(s.addr, s.vc); fromOtherNode {
-			log.Printf("can apply since %v +1 == %v", tcausal, s.vc)
-			break
-		}
+func (s *Store) writeClient(tcausal clock.VectorClock, key, value string) (
+	err error,
+	replaced bool,
+	currentClock clock.VectorClock) {
 
-		log.Println(key, "is waiting with clock", tcausal)
-		s.vcCond.Wait()
-		log.Println(key, "got a wakeup")
+	// Wait for a state that can accept our write
+	if ok := s.waitUntilCurrent(tcausal); !ok {
+		err = ErrCannotApply
+		return
 	}
 
-	_, replaced = s.store[key]
-	s.store[key] = value
-	committed = true
-	s.vc.Increment(s.addr)
-	if fromOtherNode {
-		s.vc.Increment(otherNode)
-	}
-
-	currentClock = s.vc
-	s.vc = currentClock
-
-	log.Println("committed", key, "and the clock is", s.vc)
-
-	s.vcCond.Broadcast()
+	// Perform the write
+	replaced = s.commitWrite(key, Entry{
+		Value:   value,
+		Deleted: false,
+	})
+	currentClock = s.vc.Copy()
 	return
 }
 
-// Set sets key=value and returns true iff the value replaced an old value.
-func (s *Store) Set(key, value string) bool {
-	s.m.Lock()
-	defer s.m.Unlock()
+func (s *Store) commitWrite(key string, e Entry) (replaced bool) {
+	// Check if the entry previously existed
+	oldentry, exists := s.store[key]
+	replaced = exists && oldentry.Deleted != true
 
-	old, updating := s.store[key]
-	s.store[key] = value
+	// Update the clock in anticipation of the event
+	s.vc.Increment(s.addr)
+	s.vcCond.Broadcast() // let others know this update happened once we release the lock
 
-	log.Printf("Set %q=%q", key, value)
-	if updating {
-		log.Printf("Old value was %q", old)
-	}
+	// Perform the write
+	e.Clock = s.vc.Copy()
+	s.store[key] = e
+	log.Printf("Committing %q=%q at t=%v\n", key, e.Value, s.vc)
 
-	return updating
-}
-
-// Delete removes a key.
-func (s *Store) Delete(key string) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	delete(s.store, key)
-
-	log.Printf("Deleted %q\n", key)
+	return replaced
 }
 
 // Read returns the value for a key in the Store.
-func (s *Store) Read(key string) (string, bool) {
-	s.m.RLock()
-	defer s.m.RUnlock()
+func (s *Store) Read(tcausal clock.VectorClock, key string) (
+	err error,
+	e Entry,
+	ok bool,
+	currentClock clock.VectorClock) {
 
-	value, ok := s.store[key]
+	s.m.Lock()
+	defer s.m.Unlock()
 
-	log.Printf("Reading %q=%q\n", key, value)
+	if canApply := s.waitUntilCurrent(tcausal); !canApply {
+		err = ErrCannotApply
+		return
+	}
 
-	return value, ok
+	e, ok = s.store[key]
+	currentClock = s.vc.Copy()
+	return
 }
 
 // NumKeys returns the number of keys in the store.
-func (s *Store) NumKeys() int {
-	s.m.RLock()
-	defer s.m.RUnlock()
+func (s *Store) NumKeys(tcausal clock.VectorClock) (error, int) {
+	s.m.Lock()
+	defer s.m.Unlock()
 
-	return len(s.store)
+	return nil, len(s.store)
 }
 
 func (s *Store) String() string {
-	s.m.RLock()
-	defer s.m.RUnlock()
+	s.m.Lock()
+	defer s.m.Unlock()
 	return fmt.Sprintf("%+v", s.store)
 }

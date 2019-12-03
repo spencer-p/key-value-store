@@ -2,13 +2,7 @@ package clock
 
 type VectorClock map[string]uint64
 
-func (a VectorClock) Compare(c Clock) CompareResult {
-	b, ok := c.(VectorClock)
-	if !ok {
-		// Wrong types means no relation
-		return NoRelation
-	}
-
+func (a VectorClock) Compare(b VectorClock) CompareResult {
 	// Determine if the scalars are all pairwise equal, less than or equal, OR
 	// greater than or equal in one pass.
 	equal := true
@@ -86,7 +80,7 @@ func (a VectorClock) Increment(k string) {
 	a[k] = cur + 1
 }
 
-func (a VectorClock) Copy() Clock {
+func (a VectorClock) Copy() VectorClock {
 	b := make(VectorClock)
 	for k := range a {
 		b[k] = a[k]
