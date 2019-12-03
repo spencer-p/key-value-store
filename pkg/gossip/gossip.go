@@ -59,6 +59,10 @@ func (m *Manager) relayGossip() {
 		log.Println("Relay Gossip")
 		gp := m.findGossip(nodeAddr)
 
+		if len(gp.KeyVals) == 0 {
+			return
+		}
+
 		jsonGossip, err := json.Marshal(gp)
 		log.Println("Gossip payload:", jsonGossip)
 		if err != nil {
@@ -86,7 +90,8 @@ func (m *Manager) relayGossip() {
 		client := &http.Client{}
 		resp, err := client.Do(request)
 		if err != nil {
-			log.Fatalln(err)
+			log.Println(err)
+			continue
 		}
 		if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			log.Println("Could not parse gossip response:", err)
