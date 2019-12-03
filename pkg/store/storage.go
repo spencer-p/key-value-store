@@ -33,9 +33,10 @@ func NewKeyInfo(value string, replicas []string) *KeyInfo {
 }
 
 // New constructs an empty store.
-func New() *Store {
+func New(replicas []string) *Store {
 	return &Store{
-		Store: make(map[string]*KeyInfo),
+		Store:    make(map[string]*KeyInfo),
+		Replicas: replicas,
 		// Note that the zero value for a mutex is unlocked.
 	}
 }

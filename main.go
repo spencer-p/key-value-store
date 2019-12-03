@@ -28,7 +28,7 @@ type Config struct {
 	Port        string `envconfig:"PORT" required:"true"`
 	View        string `envconfig:"VIEW" required:"true"`
 	Address     string `envconfig:"ADDRESS" required:"true"`
-	Replication int    `envconfig:"REPL_FACTOR" require:"true"`
+	Replication int    `envconfig:"REPL_FACTOR" required:"true"`
 }
 
 func main() {
@@ -57,9 +57,9 @@ func main() {
 	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	s := handlers.InitNode(r, env.Address, env.Replication, view)
+	s := handlers.InitNode(r, env.Address, env.Replication, replicas, view)
 
-	m := gossip.NewManager(s.Store, env.Address, env.Replication, replicas)
+	m := gossip.NewManager(s.Store, env.Address, env.Replication)
 	ticker := time.NewTicker(2000 * time.Millisecond)
 	go m.Gossip(ticker)
 

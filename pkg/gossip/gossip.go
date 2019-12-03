@@ -18,10 +18,9 @@ import (
 
 type Manager struct {
 	// stuff that the gossip manager needs to gossip
-	state    *store.Store
-	replicas []string
-	repFact  int
-	address  string
+	state   *store.Store
+	repFact int
+	address string
 }
 
 type GossipPayload struct {
@@ -37,12 +36,11 @@ func newGossipPayload(senderAddr string) *GossipPayload {
 	return gp
 }
 
-func NewManager(s *store.Store, address string, repFact int, replicas []string) *Manager {
+func NewManager(s *store.Store, address string, repFact int) *Manager {
 	m := &Manager{
-		state:    s,
-		replicas: replicas,
-		repFact:  repFact,
-		address:  address,
+		state:   s,
+		repFact: repFact,
+		address: address,
 	}
 	return m
 }
@@ -53,12 +51,12 @@ func (m *Manager) relayGossip() {
 	var result types.Response
 	replicaPath := "/kv-store/gossip"
 
-	log.Println("Relay Gossip")
 	for _, nodeAddr := range m.state.Replicas {
 		if nodeAddr == m.address {
 			continue
 		}
 
+		log.Println("Relay Gossip")
 		gp := m.findGossip(nodeAddr)
 
 		jsonGossip, err := json.Marshal(gp)
