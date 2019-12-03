@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/store"
-	"github.com/spencer-p/cse138/pkg/types"
+	//"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 
 	"github.com/gorilla/mux"
@@ -54,7 +54,6 @@ func NewManager(s *store.Store, address string, repFact int) *Manager {
 // gossips to other replicas periodically
 func (m *Manager) relayGossip() {
 	//defer result somewhere
-	var result types.Response
 	replicaPath := "/kv-store/gossip"
 
 	for _, nodeAddr := range m.state.Replicas {
@@ -95,12 +94,10 @@ func (m *Manager) relayGossip() {
 
 		client := &http.Client{}
 		resp, err := client.Do(request)
+		_ = resp
 		if err != nil {
 			log.Println(err)
 			continue
-		}
-		if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			log.Println("Could not parse gossip response:", err)
 		}
 	}
 }
@@ -116,6 +113,7 @@ func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 		replicaClock := (*val.Vec)[replicaAddress]
 		if nodeClock > replicaClock {
 			gp.KeyVals[key] = val
+			(*val.Vec)[replicaAddress] = nodeClock
 		}
 	}
 	return gp
@@ -134,6 +132,7 @@ func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 
 	// loop through key-value pairs that were sent and apply updates
 	for key, val := range in.KeyVals {
+		log.Println("Going through this key...", key)
 		m.state.SetGossip(key, m.address, in.SenderAddr, val)
 	}
 }
