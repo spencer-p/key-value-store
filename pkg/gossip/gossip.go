@@ -110,6 +110,7 @@ func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 		replicaClock := (*val.Vec)[replicaAddress]
 		if nodeClock > replicaClock {
 			gp.KeyVals[key] = val
+			(*val.Vec)[replicaAddress] = replicaClock + 1
 		}
 	}
 	return gp
@@ -128,6 +129,7 @@ func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
 
 	// loop through key-value pairs that were sent and apply updates
 	for key, val := range in.KeyVals {
+		log.Println("Going through this key...", key)
 		m.state.SetGossip(key, m.address, in.SenderAddr, val)
 	}
 }
