@@ -44,3 +44,23 @@ func CorrectURL(addr string) string {
 	}
 	return addr
 }
+
+func GetReplicasAddr(view []string, address string, repFact int) []string {
+	var replicas []string
+	seen := false
+	for _, nodeAddr := range view {
+		if len(replicas) == repFact {
+			if seen {
+				break
+			} else {
+				replicas = nil
+			}
+		}
+		if nodeAddr == address {
+			seen = true
+		}
+		replicas = append(replicas, nodeAddr)
+	}
+
+	return replicas
+}

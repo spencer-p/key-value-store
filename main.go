@@ -37,21 +37,7 @@ func main() {
 	log.Printf("Configured: %+v\n", env)
 
 	view := strings.Split(env.View, ",")
-	var replicas []string
-	seen := false
-	for _, nodeAddr := range view {
-		if len(replicas) == env.Replication {
-			if seen {
-				break
-			} else {
-				replicas = nil
-			}
-		}
-		if nodeAddr == env.Address {
-			seen = true
-		}
-		replicas = append(replicas, nodeAddr)
-	}
+	replicas := util.GetReplicasAddr(view, env.Address, env.Replication)
 	log.Println("Replica Addresses:", replicas)
 
 	// Create a mux and route handlers
