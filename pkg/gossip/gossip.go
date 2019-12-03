@@ -28,12 +28,6 @@ type GossipPayload struct {
 	SenderAddr string
 }
 
-func (m *Manager) updateVectorClock(gp *GossipPayload, address string) {
-	for key, val := range gp.KeyVals {
-		gp.state.Store[key].Vec[address] = val.Vec[m.address]
-	}
-}
-
 func newGossipPayload(senderAddr string) *GossipPayload {
 	gp := &GossipPayload{
 		KeyVals:    make(map[string]*store.KeyInfo),
@@ -99,6 +93,8 @@ func (m *Manager) relayGossip() {
 			log.Println(err)
 			continue
 		}
+
+		m.updateVectorClock(gp, nodeAddr)
 	}
 }
 
@@ -117,6 +113,12 @@ func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 		}
 	}
 	return gp
+}
+
+func (m *Manager) updateVectorClock(gp *GossipPayload, address string) {
+	for key, val := range gp.KeyVals {
+		(*gp.KeyVals[key].Vec)[address] = (*val.Vec)[m.address]
+	}
 }
 
 func (m *Manager) Receive(w http.ResponseWriter, r *http.Request) {
