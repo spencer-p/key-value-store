@@ -53,6 +53,7 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
+	log.Printf("Write %q at %v (not > %v)\n", key, tcausal, s.vc)
 
 	// Perform the write
 	replaced = s.commitWrite(key, Entry{
@@ -74,6 +75,7 @@ func (s *Store) ImportEntry(key string, e Entry) error {
 		}
 		s.vcCond.Wait()
 	}
+	log.Printf("Import %q at %v (not bad wrt %v)\n", key, e.Clock, s.vc)
 
 	s.vc.Max(e.Clock)
 	s.commitWrite(key, e)
@@ -110,6 +112,7 @@ func (s *Store) Read(tcausal clock.VectorClock, key string) (
 	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
+	log.Printf("Read %q at %v (not > %v)\n", key, tcausal, s.vc)
 
 	e, ok = s.store[key]
 	currentClock = s.vc.Copy()

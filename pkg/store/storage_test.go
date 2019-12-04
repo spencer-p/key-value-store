@@ -214,11 +214,14 @@ func TestCausality(t *testing.T) {
 		// two writes from another store get gossipped in.
 		// a read is performed that expects the gossip values.
 		s := New("a")
+		var wg sync.WaitGroup
+		wg.Add(3)
 		go func() {
 			err, _, _ := s.Write(clock.VectorClock{}, "x", "1")
 			if err != nil {
 				t.Errorf("Failed to write x=1: %v", err)
 			}
+			wg.Done()
 		}()
 		go func() {
 			err := s.ImportEntry("y", Entry{
@@ -228,6 +231,7 @@ func TestCausality(t *testing.T) {
 			if err != nil {
 				t.Errorf("Failed to gossip y=2 from b: %v", err)
 			}
+			wg.Done()
 		}()
 		go func() {
 			err := s.ImportEntry("z", Entry{
@@ -237,7 +241,9 @@ func TestCausality(t *testing.T) {
 			if err != nil {
 				t.Errorf("Failed to gossip z=3 from b: %v", err)
 			}
+			wg.Done()
 		}()
+		wg.Wait()
 
 		shouldRead(t, s, clock.VectorClock{"a": 1}, "x", "1")
 		shouldRead(t, s, clock.VectorClock{"b": 2}, "y", "2")
