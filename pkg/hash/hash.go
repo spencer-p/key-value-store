@@ -44,10 +44,10 @@ func (m *Modulo) Get(key string) (string, error) {
 	m.fnv.Reset()
 	fmt.Fprintf(m.fnv, key)
 	i := m.fnv.Sum32()
-	return m.testGet(i), nil
+	return m.getAddress(i), nil
 }
 
-func (m *Modulo) testGet(h uint32) string {
+func (m *Modulo) getAddress(h uint32) string {
 	perShard := uint32(len(m.elts)) / m.scount
 
 	shardIndex := h % m.scount
