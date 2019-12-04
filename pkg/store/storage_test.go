@@ -23,7 +23,7 @@ func dowrites(s *Store, batch WriteBatch) map[string]bool {
 			wg.Add(1)
 		}
 		go func() {
-			err, _, _ := s.Write(b.vc, true, b.key, b.value)
+			err, _, _ := s.Write(b.vc, b.key, b.value)
 			results[b.id] = err != nil
 			if b.wait {
 				wg.Done()
@@ -108,10 +108,10 @@ func TestCausality(t *testing.T) {
 
 		go func() {
 			var err error
-			if err, _, c1 = s.Write(c1, true, "x", "1"); err != nil {
+			if err, _, c1 = s.Write(c1, "x", "1"); err != nil {
 				t.Errorf("Failed to write x: %v", err)
 			}
-			if err, _, c1 = s.Write(c1, true, "y", "2"); err != nil {
+			if err, _, c1 = s.Write(c1, "y", "2"); err != nil {
 				t.Errorf("Failed to write y: %v", err)
 			}
 			wg.Done()
@@ -119,13 +119,13 @@ func TestCausality(t *testing.T) {
 
 		go func() {
 			var err error
-			if err, _, c2 = s.Write(c2, true, "a", "1"); err != nil {
+			if err, _, c2 = s.Write(c2, "a", "1"); err != nil {
 				t.Errorf("Failed to write a: %v", err)
 			}
-			if err, _, c2 = s.Write(c2, true, "b", "2"); err != nil {
+			if err, _, c2 = s.Write(c2, "b", "2"); err != nil {
 				t.Errorf("Failed to write b: %v", err)
 			}
-			if err, _, c2 = s.Write(c2, true, "c", "3"); err != nil {
+			if err, _, c2 = s.Write(c2, "c", "3"); err != nil {
 				t.Errorf("Failed to write c: %v", err)
 			}
 			wg.Done()
@@ -187,14 +187,17 @@ func TestCausality(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
-			err, _, _ := s.Write(clock.VectorClock{"b": 1}, true, "y", "2")
+			err, _, _ := s.Write(clock.VectorClock{"b": 1}, "y", "2")
 			if err != nil {
 				t.Errorf("Failed to write y=2: %v", err)
 			}
 			wg.Done()
 		}()
 		go func() {
-			err, _, _ := s.Write(clock.VectorClock{"b": 1}, false, "x", "1")
+			err := s.ImportEntry("x", Entry{
+				Value: "1",
+				Clock: clock.VectorClock{"b": 1},
+			})
 			if err != nil {
 				t.Errorf("Failed to gossip x=1 from b: %v", err)
 			}
@@ -207,14 +210,67 @@ func TestCausality(t *testing.T) {
 	})
 
 	t.Run("gossip can merge in", func(t *testing.T) {
-	})
+		// one write happens locally.
+		// two writes from another store get gossipped in.
+		// a read is performed that expects the gossip values.
+		s := New("a")
+		go func() {
+			err, _, _ := s.Write(clock.VectorClock{}, "x", "1")
+			if err != nil {
+				t.Errorf("Failed to write x=1: %v", err)
+			}
+		}()
+		go func() {
+			err := s.ImportEntry("y", Entry{
+				Value: "2",
+				Clock: clock.VectorClock{"b": 1},
+			})
+			if err != nil {
+				t.Errorf("Failed to gossip y=2 from b: %v", err)
+			}
+		}()
+		go func() {
+			err := s.ImportEntry("z", Entry{
+				Value: "3",
+				Clock: clock.VectorClock{"b": 2},
+			})
+			if err != nil {
+				t.Errorf("Failed to gossip z=3 from b: %v", err)
+			}
+		}()
 
-	t.Run("divergent gossip is ok", func(t *testing.T) {
-	})
-
-	t.Run("divergent gossip with shared history is ok", func(t *testing.T) {
+		shouldRead(t, s, clock.VectorClock{"a": 1}, "x", "1")
+		shouldRead(t, s, clock.VectorClock{"b": 2}, "y", "2")
+		shouldRead(t, s, clock.VectorClock{"b": 2}, "z", "3")
 	})
 
 	t.Run("conflicting writes are resolved", func(t *testing.T) {
+		// two writes the same value are committed. who wins?
+		s := New("a")
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			err, _, _ := s.Write(clock.VectorClock{}, "x", "1")
+			if err != nil {
+				t.Errorf("Failed to write x=1: %v", err)
+			}
+			wg.Done()
+		}()
+		go func() {
+			err := s.ImportEntry("x", Entry{
+				Value: "2",
+				Clock: clock.VectorClock{"b": 1},
+			})
+			if err != nil {
+				t.Errorf("Failed to gossip x=2 from b: %v", err)
+			}
+			wg.Done()
+		}()
+		wg.Wait()
+
+		err, e, ok, c := s.Read(clock.VectorClock{}, "x")
+		if e.Value != "1" && e.Value != "2" {
+			t.Errorf("Read x gave err=%v, e=%v, ok=%t, c=%v", err, e, ok, c)
+		}
 	})
 }

@@ -40,7 +40,7 @@ func New(selfAddr string) *Store {
 	}
 }
 
-func (s *Store) Write(tcausal clock.VectorClock, fromClient bool, key, value string) (
+func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	err error,
 	replaced bool,
 	currentClock clock.VectorClock) {
@@ -49,22 +49,8 @@ func (s *Store) Write(tcausal clock.VectorClock, fromClient bool, key, value str
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	if fromClient {
-		return s.writeClient(tcausal, key, value)
-	} else {
-		err = ErrCannotApply
-		return
-	}
-}
-
-func (s *Store) writeClient(tcausal clock.VectorClock, key, value string) (
-	err error,
-	replaced bool,
-	currentClock clock.VectorClock) {
-
 	// Wait for a state that can accept our write
-	if ok := s.waitUntilCurrent(tcausal); !ok {
-		err = ErrCannotApply
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -75,6 +61,10 @@ func (s *Store) writeClient(tcausal clock.VectorClock, key, value string) (
 	})
 	currentClock = s.vc.Copy()
 	return
+}
+
+func (s *Store) ImportEntry(key string, e Entry) error {
+	return nil
 }
 
 func (s *Store) commitWrite(key string, e Entry) (replaced bool) {
@@ -104,8 +94,7 @@ func (s *Store) Read(tcausal clock.VectorClock, key string) (
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	if canApply := s.waitUntilCurrent(tcausal); !canApply {
-		err = ErrCannotApply
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
