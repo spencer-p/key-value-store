@@ -63,7 +63,7 @@ func (m *Manager) relayGossip() {
 		}
 
 		jsonGossip, err := json.Marshal(gp)
-		log.Println("Gossip payload:", jsonGossip)
+		log.Println("Gossip payload:", string(jsonGossip))
 		if err != nil {
 			log.Fatalln("Failed to marshal GossipPayload")
 		}
