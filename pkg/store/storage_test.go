@@ -57,8 +57,8 @@ func TestCausality(t *testing.T) {
 	journal := make(chan Entry, 2)
 	go func() {
 		for {
-			e := <-journal
-			t.Log("Got from journal", e)
+			// consume everything and delete it
+			<-journal
 		}
 	}()
 

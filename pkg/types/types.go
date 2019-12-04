@@ -79,6 +79,11 @@ func WrapHTTP(next func(Input, *Response)) http.HandlerFunc {
 			return
 		}
 
+		// default the causal context
+		if in.CausalCtx == nil {
+			in.CausalCtx = clock.VectorClock{}
+		}
+
 		next(in, result)
 		result.Serve(w, r)
 	}

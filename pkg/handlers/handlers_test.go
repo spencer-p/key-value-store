@@ -9,6 +9,7 @@ import (
 
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/ptr"
+	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/google/go-cmp/cmp"
@@ -157,7 +158,7 @@ func TestPut(t *testing.T) {
 
 			// Create one server per set of requests
 			r := mux.NewRouter()
-			s := NewState(FAKE_ADDRESS, []string{FAKE_ADDRESS})
+			s := NewState(FAKE_ADDRESS, []string{FAKE_ADDRESS}, store.NopJournal())
 			s.Route(r)
 
 			for i, test := range requests {
@@ -166,7 +167,7 @@ func TestPut(t *testing.T) {
 				t.Run(fmt.Sprintf("%d %s %s", i, test.method, test.in.Key), func(t *testing.T) {
 					req := httptest.NewRequest(test.method,
 						"/kv-store/keys/"+test.in.Key,
-						bytes.NewBufferString(`{"value":"`+test.in.Value+`"}`))
+						bytes.NewBufferString(`{"value":"`+test.in.Value+`","causal-context":{}}`))
 
 					resp := httptest.NewRecorder()
 
@@ -176,6 +177,9 @@ func TestPut(t *testing.T) {
 					if err := json.Unmarshal(resp.Body.Bytes(), &got); err != nil {
 						t.Errorf("Failed to parse response: %v", err)
 					}
+
+					// ignore the clock
+					got.CausalCtx = nil
 
 					if diff := cmp.Diff(&got, &test.want); diff != "" {
 						t.Errorf("Got bad body (-got, +want): %s", diff)
