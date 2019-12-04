@@ -22,7 +22,7 @@ import (
 const (
 	// This has to be shorter than the http server read/write timeout so that we
 	// don't get preempted by the http server dispatcher.
-	CLIENT_TIMEOUT = 2 * time.Second
+	CLIENT_TIMEOUT = 5 * time.Minute
 
 	ADDRESS_KEY = "forwading_address"
 )

@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	TIMEOUT = 5 * time.Second
+	TIMEOUT = 10 * time.Minute
 )
 
 type Config struct {
