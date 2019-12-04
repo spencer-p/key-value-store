@@ -15,8 +15,8 @@ var (
 
 type Entry struct {
 	Value   string
-	Clock   clock.VectorClock
 	Deleted bool
+	Clock   clock.VectorClock
 }
 
 // Store represents a volatile key value store.
@@ -79,6 +79,7 @@ func (s *Store) ImportEntry(key string, e Entry) error {
 
 	s.vc.Max(e.Clock)
 	s.commitWrite(key, e)
+
 	return nil
 }
 
@@ -91,10 +92,12 @@ func (s *Store) commitWrite(key string, e Entry) (replaced bool) {
 	s.vc.Increment(s.addr)
 	s.vcCond.Broadcast() // let others know this update happened once we release the lock
 
-	// Perform the write
+	// Mark the clock
 	e.Clock = s.vc.Copy()
+
+	// Perform the write
 	s.store[key] = e
-	log.Printf("Committing %q=%q at t=%v\n", key, e.Value, s.vc)
+	log.Printf("Committed %q=%q at t=%v\n", key, e.Value, s.vc)
 
 	return replaced
 }
@@ -123,6 +126,10 @@ func (s *Store) Read(tcausal clock.VectorClock, key string) (
 func (s *Store) NumKeys(tcausal clock.VectorClock) (error, int) {
 	s.m.Lock()
 	defer s.m.Unlock()
+
+	if err := s.waitUntilCurrent(tcausal); err != nil {
+		return err, 0
+	}
 
 	return nil, len(s.store)
 }
