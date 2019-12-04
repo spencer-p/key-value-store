@@ -20,8 +20,7 @@ type WriteBatch []struct {
 	wait       bool
 }
 
-func dowrites(s *Store, batch WriteBatch) map[string]bool {
-	results := make(map[string]bool)
+func dowrites(s *Store, batch WriteBatch) {
 	var wg sync.WaitGroup
 	for _, b := range batch {
 		b := b
@@ -29,15 +28,14 @@ func dowrites(s *Store, batch WriteBatch) map[string]bool {
 			wg.Add(1)
 		}
 		go func() {
-			err, _, _ := s.Write(b.vc, b.key, b.value)
-			results[b.id] = err != nil
+			_, _, _ = s.Write(b.vc, b.key, b.value)
+			// TODO check errors
 			if b.wait {
 				wg.Done()
 			}
 		}()
 	}
 	wg.Wait()
-	return results
 }
 
 func shouldRead(t *testing.T, s *Store, tc clock.VectorClock, key, value string) (passed bool) {
@@ -56,9 +54,16 @@ func shouldRead(t *testing.T, s *Store, tc clock.VectorClock, key, value string)
 }
 
 func TestCausality(t *testing.T) {
+	journal := make(chan Entry, 2)
+	go func() {
+		for {
+			e := <-journal
+			t.Log("Got from journal", e)
+		}
+	}()
 
 	t.Run("writes apply causally", func(t *testing.T) {
-		s := New(Alice)
+		s := New(Alice, journal)
 
 		dowrites(s, WriteBatch{{
 			id:    "a",
@@ -105,7 +110,7 @@ func TestCausality(t *testing.T) {
 	t.Run("writes can interleave", func(t *testing.T) {
 		// have two "clients" write separate histories
 
-		s := New(Alice)
+		s := New(Alice, journal)
 		var wg sync.WaitGroup
 		wg.Add(2)
 
@@ -150,7 +155,7 @@ func TestCausality(t *testing.T) {
 
 	t.Run("reads block until applicable", func(t *testing.T) {
 		done := make(chan struct{})
-		s := New(Alice)
+		s := New(Alice, journal)
 		var e Entry
 		var ok bool
 		go func() {
@@ -189,7 +194,7 @@ func TestCausality(t *testing.T) {
 
 	t.Run("multireplicant write is handled", func(t *testing.T) {
 		// client writes x to r1, then writes y to r2. Gossip is required before y is written.
-		s := New(Alice)
+		s := New(Alice, journal)
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
@@ -219,7 +224,7 @@ func TestCausality(t *testing.T) {
 		// one write happens locally.
 		// two writes from another store get gossipped in.
 		// a read is performed that expects the gossip values.
-		s := New(Alice)
+		s := New(Alice, journal)
 		var wg sync.WaitGroup
 		wg.Add(3)
 		go func() {

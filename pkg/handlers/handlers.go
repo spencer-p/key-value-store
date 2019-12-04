@@ -27,10 +27,9 @@ func (s *State) deleteHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	_, ok := s.store.Read(in.Key)
+	ok, vc := s.store.Delete(in.CausalCtx, in.Key)
 	res.Exists = &ok
-
-	s.store.Delete(in.Key)
+	res.CausalCtx = vc
 
 	if !ok {
 		res.Status = http.StatusNotFound
@@ -41,12 +40,17 @@ func (s *State) deleteHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) getHandler(in types.Input, res *types.Response) {
-	value, exists := s.store.Read(in.Key)
-
-	res.Exists = &exists
-	if exists {
+	err, e, ok, vc := s.store.Read(in.CausalCtx, in.Key)
+	if err != nil {
+		res.Status = http.StatusServiceUnavailable
+		res.Error = msg.Unavailable
+		return
+	}
+	res.CausalCtx = vc
+	res.Exists = &ok
+	if ok {
 		res.Message = msg.GetSuccess
-		res.Value = value
+		res.Value = e.Value
 	} else {
 		res.Error = msg.KeyDNE
 		res.Status = http.StatusNotFound
@@ -54,10 +58,16 @@ func (s *State) getHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) countHandler(in types.Input, res *types.Response) {
-	KeyCount := s.store.NumKeys()
+	err, count, vc := s.store.NumKeys(in.CausalCtx)
+	if err != nil {
+		res.Status = http.StatusServiceUnavailable
+		res.Error = msg.Unavailable
+		return
+	}
 
 	res.Message = msg.NumKeySuccess
-	res.KeyCount = &KeyCount
+	res.KeyCount = &count
+	res.CausalCtx = vc
 }
 
 func (s *State) putHandler(in types.Input, res *types.Response) {
@@ -67,8 +77,14 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	replaced := s.store.Set(in.Key, in.Value)
+	err, replaced, vc := s.store.Write(in.CausalCtx, in.Key, in.Value)
+	if err != nil {
+		res.Status = http.StatusServiceUnavailable
+		res.Error = msg.Unavailable
+		return
+	}
 
+	res.CausalCtx = vc
 	res.Replaced = &replaced
 	res.Message = msg.PutSuccess
 	if replaced {
@@ -78,14 +94,14 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func InitNode(r *mux.Router, addr string, view []string) {
-	s := NewState(addr, view)
+func InitNode(r *mux.Router, addr string, view []string, journal chan<- store.Entry) {
+	s := NewState(addr, view, journal)
 	s.Route(r)
 }
 
-func NewState(addr string, view []string) *State {
+func NewState(addr string, view []string, journal chan<- store.Entry) *State {
 	s := &State{
-		store:   store.New(),
+		store:   store.New(addr, journal),
 		hash:    hash.NewModulo(),
 		address: addr,
 		cli: &http.Client{

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/handlers"
+	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/util"
 
 	"github.com/gorilla/mux"
@@ -35,10 +36,15 @@ func main() {
 	log.Printf("Configured: %+v\n", env)
 
 	// Create a mux and route handlers
-
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	handlers.InitNode(r, env.Address, strings.Split(env.View, ","))
+	// TODO this is what i would hope to see:
+	// 1. make some sort of gossip manager
+	// 2. ask the gossip manager for a channel we can send to
+	// 3. give that channel to the handlers
+	journal := make(chan store.Entry, 10)
+	go func() { log.Println("Journalling", <-journal) }()
+	handlers.InitNode(r, env.Address, strings.Split(env.View, ","), journal)
 
 	srv := &http.Server{
 		Handler:      r,

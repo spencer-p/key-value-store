@@ -13,33 +13,40 @@ var (
 	ErrCannotApply = errors.New("Cannot apply operation")
 )
 
+// Entry describes a full data point in the store.
+// The value is required. Other fields are semi-optional depending on the context.
 type Entry struct {
-	Value   string
-	Deleted bool
-	Clock   clock.VectorClock
+	Key, Value string
+	Deleted    bool
+	Clock      clock.VectorClock
 }
 
 // Store represents a volatile key value store.
 type Store struct {
-	addr   string
-	store  map[string]Entry
-	m      *sync.RWMutex
-	vc     clock.VectorClock
-	vcCond *sync.Cond
+	addr    string
+	store   map[string]Entry
+	m       *sync.RWMutex
+	vc      clock.VectorClock
+	vcCond  *sync.Cond
+	journal chan<- Entry
 }
 
-// New constructs an empty store.
-func New(selfAddr string) *Store {
+// New constructs an empty store that resides at the given address or unique ID.
+// The callback channel is issued all new modifications to the store (like a journal).
+func New(selfAddr string, callback chan<- Entry) *Store {
 	var mtx sync.RWMutex
 	return &Store{
-		addr:   selfAddr,
-		store:  make(map[string]Entry),
-		m:      &mtx,
-		vc:     clock.VectorClock{},
-		vcCond: sync.NewCond(&mtx),
+		addr:    selfAddr,
+		store:   make(map[string]Entry),
+		m:       &mtx,
+		vc:      clock.VectorClock{},
+		vcCond:  sync.NewCond(&mtx),
+		journal: callback,
 	}
 }
 
+// Write performs a new write to the store. It will block until the write can be applied
+// according to the vector clock passed.
 func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	err error,
 	replaced bool,
@@ -48,6 +55,9 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	// Acquire access to the store
 	s.m.Lock()
 	defer s.m.Unlock()
+
+	// Remember to copy the clock before returning
+	defer s.copyClock(&currentClock)
 
 	// Wait for a state that can accept our write
 	if err = s.waitUntilCurrent(tcausal); err != nil {
@@ -60,10 +70,10 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 		Value:   value,
 		Deleted: false,
 	})
-	currentClock = s.vc.Copy()
 	return
 }
 
+// ImportEntry imports an existing entry from another store.
 func (s *Store) ImportEntry(key string, e Entry) error {
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -83,6 +93,18 @@ func (s *Store) ImportEntry(key string, e Entry) error {
 	return nil
 }
 
+// Delete deletes a key, returning true if it was deleted.
+func (s *Store) Delete(tcausal clock.VectorClock, key string) (deleted bool, currentClock clock.VectorClock) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	defer s.copyClock(&currentClock)
+	if err := s.waitUntilCurrent(tcausal); err != nil {
+		return
+	}
+	deleted = s.commitWrite(key, Entry{Deleted: true})
+	return
+}
+
 func (s *Store) commitWrite(key string, e Entry) (replaced bool) {
 	// Check if the entry previously existed
 	oldentry, exists := s.store[key]
@@ -95,9 +117,19 @@ func (s *Store) commitWrite(key string, e Entry) (replaced bool) {
 	// Mark the clock
 	e.Clock = s.vc.Copy()
 
+	// Double check the key is good
+	if e.Key == "" {
+		e.Key = key
+	}
+
 	// Perform the write
 	s.store[key] = e
 	log.Printf("Committed %q=%q at t=%v\n", key, e.Value, s.vc)
+
+	// Make a copy that cannot interact with the store's copy;
+	// then send it to the journal
+	e.Clock = e.Clock.Copy()
+	s.journal <- e
 
 	return replaced
 }
@@ -111,33 +143,42 @@ func (s *Store) Read(tcausal clock.VectorClock, key string) (
 
 	s.m.Lock()
 	defer s.m.Unlock()
+	defer s.copyClock(&currentClock)
 
 	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 	log.Printf("Read %q at %v (not > %v)\n", key, tcausal, s.vc)
 
+	// Perform the read. Act like it doesn't exist if it was deleted.
 	e, ok = s.store[key]
-	currentClock = s.vc.Copy()
+	if e.Deleted {
+		ok = false
+	}
 	return
 }
 
 // NumKeys returns the number of keys in the store.
-func (s *Store) NumKeys(tcausal clock.VectorClock) (error, int) {
+func (s *Store) NumKeys(tcausal clock.VectorClock) (
+	err error,
+	count int,
+	currentClock clock.VectorClock) {
 	s.m.Lock()
 	defer s.m.Unlock()
+	defer s.copyClock(&currentClock)
 
-	if err := s.waitUntilCurrent(tcausal); err != nil {
-		return err, 0
+	if err = s.waitUntilCurrent(tcausal); err != nil {
+		return
 	}
 
-	return nil, len(s.store)
+	count = len(s.store)
+	return
 }
 
 func (s *Store) String() string {
 	s.m.Lock()
 	defer s.m.Unlock()
-	return fmt.Sprintf("%+v", s.store)
+	return fmt.Sprintf("%v %+v", s.vc, s.store)
 }
 
 // waitUntilCurrent returns a function that stalls until the waiting vector
@@ -151,4 +192,8 @@ func (s *Store) waitUntilCurrent(waiting clock.VectorClock) error {
 		}
 		s.vcCond.Wait()
 	}
+}
+
+func (s *Store) copyClock(c *clock.VectorClock) {
+	*c = s.vc.Copy()
 }

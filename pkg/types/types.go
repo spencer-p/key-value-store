@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 )
 
@@ -28,6 +29,9 @@ type Response struct {
 
 	// Potential forwarding metadata
 	Address string `json:"address,omitempty"`
+
+	// Context for causal consistency
+	CausalCtx clock.VectorClock `json:"causal-context"`
 }
 
 type Shard struct {
@@ -42,6 +46,9 @@ type Input struct {
 	// A View and Batch is only used for view change requests.
 	View  string  `json:"view"`
 	Batch []Entry `json:"diff"`
+
+	// Context the request thinks is current
+	CausalCtx clock.VectorClock `json:"causal-context"`
 
 	// Marked true only for internal communication.
 	Internal bool `json:"internal,omitempty"`

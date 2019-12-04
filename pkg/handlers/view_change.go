@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
@@ -65,8 +66,9 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 // returns them.
 func (s *State) getBatches() map[string][]types.Entry {
 	batches := make(map[string][]types.Entry)
-	s.store.For(func(key, value string) store.IterAction {
+	s.store.For(func(key string, e store.Entry) store.IterAction {
 		target, err := s.hash.Get(key)
+		value := e.Value
 		if err != nil {
 			log.Printf("Invalid key %q=%q: %v. Dropping.\n", key, value, err)
 		}
@@ -85,8 +87,9 @@ func (s *State) getBatches() map[string][]types.Entry {
 // deleteEntries removes the given batches from our own state.
 func (s *State) deleteEntries(entries []types.Entry) {
 	log.Println("Deleting", len(entries), "offloaded keys")
-	for i := range entries {
-		s.store.Delete(entries[i].Key)
+	for _ = range entries {
+		// TODO Force these deletes somehow (or don't?)
+		//s.store.Delete(clock.VectorClock{}, entries[i].Key)
 	}
 }
 
@@ -143,8 +146,9 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 }
 
 func (s *State) applyBatch(batch []types.Entry) {
-	for _, e := range batch {
-		s.store.Set(e.Key, e.Value)
+	for _, _ = range batch {
+		// TODO these need to be stored better
+		//s.store.Set(e.Key, e.Value)
 	}
 }
 
@@ -199,7 +203,8 @@ func (s *State) getKeyCounts(view []string) []types.Shard {
 
 			// Don't make a request if it's just ourselves
 			if addr == s.address {
-				shard.KeyCount = s.store.NumKeys()
+				// TODO do something smarter
+				_, shard.KeyCount, _ = s.store.NumKeys(clock.VectorClock{})
 				return
 			}
 
