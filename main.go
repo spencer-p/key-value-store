@@ -37,13 +37,13 @@ func main() {
 	log.Printf("Configured: %+v\n", env)
 
 	view := strings.Split(env.View, ",")
-	replicas := util.GetReplicasAddr(view, env.Address, env.Replication)
+	replicas, shardId := util.GetReplicasAddr(view, env.Address, env.Replication)
 	log.Println("Replica Addresses:", replicas)
 
 	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	s := handlers.InitNode(r, env.Address, env.Replication, replicas, view)
+	s := handlers.InitNode(r, env.Address, env.Replication, replicas, view, shardId)
 
 	m := gossip.NewManager(s.Store, env.Address, env.Replication)
 	ticker := time.NewTicker(2000 * time.Millisecond)

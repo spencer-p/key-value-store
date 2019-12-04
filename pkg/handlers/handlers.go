@@ -16,6 +16,8 @@ import (
 
 type State struct {
 	Store   *store.Store
+	repFact int
+	id      string
 	hash    hash.Interface
 	address string
 	cli     *http.Client
@@ -79,16 +81,28 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func InitNode(r *mux.Router, addr string, repFact int, replicas []string, view []string) *State {
-	s := NewState(addr, replicas, view, repFact)
+func (s *State) idHandler(in types.Input, res *types.Response) {
+	KeyCount := s.Store.NumKeys()
+	if s.id != in.Key {
+		log.Println("Wrong shard!")
+	}
+	res.ShardId = s.id
+	res.KeyCount = &KeyCount
+	res.Replicas = s.Store.Replicas
+}
+
+func InitNode(r *mux.Router, addr string, repFact int, replicas []string, view []string, shardId string) *State {
+	s := NewState(addr, replicas, view, repFact, shardId)
 	s.Route(r, repFact)
 
 	return s
 }
 
-func NewState(addr string, replicas []string, view []string, repFact int) *State {
+func NewState(addr string, replicas []string, view []string, repFact int, id string) *State {
 	s := &State{
 		Store:   store.New(replicas),
+		repFact: repFact,
+		id:      id,
 		hash:    hash.NewModulo(),
 		address: addr,
 		cli: &http.Client{
@@ -107,7 +121,10 @@ func (s *State) Route(r *mux.Router, repFact int) {
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
-	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForward)
+	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", s.forwardMessage).MatcherFunc(s.shouldForwardId)
+	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", types.WrapHTTP(s.idHandler)).Methods(http.MethodGet)
+
+	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForwardKey)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)

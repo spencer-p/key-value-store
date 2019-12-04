@@ -11,10 +11,11 @@ const (
 	ViewChangeSuccess        = "View change successful"
 	PartialViewChangeSuccess = "Partial view change successful"
 
-	FailedToParse = "Failed to parse request body"
-	KeyMissing    = "Key is missing"
-	KeyDNE        = "Key does not exist"
-	KeyTooLong    = "Key is too long"
-	ValueMissing  = "Value is missing"
-	BadForwarding = "Bad forwarding address"
+	FailedToParse  = "Failed to parse request body"
+	KeyMissing     = "Key is missing"
+	KeyDNE         = "Key does not exist"
+	KeyTooLong     = "Key is too long"
+	ValueMissing   = "Value is missing"
+	BadForwarding  = "Bad forwarding address"
+	SatisfyRequest = "Unable to satisfy request"
 )

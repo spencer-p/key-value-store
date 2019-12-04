@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -27,7 +28,32 @@ const (
 	ADDRESS_KEY = "forwading_address"
 )
 
-func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
+func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
+	id := path.Base(r.URL.Path)
+	if id == s.id {
+		log.Printf("Id %q is serviced by this node\n", id)
+		return false
+	} else {
+
+		//TODO find address of shardId
+		// Store the target node address in the http request context.
+		view := s.hash.Members()
+
+		id, err := strconv.Atoi(id)
+		if err != nil {
+			log.Printf("Failed to strconv id\n", id)
+			return false
+		}
+
+		shardIndex := (len(view) / s.repFact) * id
+		log.Printf("Id %q is serviced by %q\n", id, view[shardIndex])
+		ctx := context.WithValue(r.Context(), ADDRESS_KEY, view[shardIndex])
+		*r = *(r.WithContext(ctx))
+		return true
+	}
+}
+
+func (s *State) shouldForwardKey(r *http.Request, rm *mux.RouteMatch) bool {
 	key := path.Base(r.URL.Path)
 	nodeAddr, err := s.hash.Get(key)
 	if err != nil {
