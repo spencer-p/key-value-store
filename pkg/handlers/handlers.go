@@ -80,13 +80,13 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 }
 
 func InitNode(r *mux.Router, addr string, repFact int, replicas []string, view []string) *State {
-	s := NewState(addr, replicas, view)
+	s := NewState(addr, replicas, view, repFact)
 	s.Route(r, repFact)
 
 	return s
 }
 
-func NewState(addr string, replicas []string, view []string) *State {
+func NewState(addr string, replicas []string, view []string, repFact int) *State {
 	s := &State{
 		Store:   store.New(replicas),
 		hash:    hash.NewModulo(),
@@ -97,7 +97,7 @@ func NewState(addr string, replicas []string, view []string) *State {
 	}
 
 	log.Println("Adding these node address to members of hash", view)
-	s.hash.Set(view)
+	s.hash.Set(view, repFact)
 
 	return s
 }

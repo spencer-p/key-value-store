@@ -4,7 +4,7 @@ package hash
 type Interface interface {
 	Get(string) (string, error)
 	Members() []string
-	Set([]string)
+	Set([]string, int)
 	TestAndSet([]string) bool
 }
 
