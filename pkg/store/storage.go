@@ -64,6 +64,19 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 }
 
 func (s *Store) ImportEntry(key string, e Entry) error {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	for {
+		if e.Clock.OneUpExcept(s.addr, s.vc) {
+			// One atomic update from other nodes.
+			break
+		}
+		s.vcCond.Wait()
+	}
+
+	s.vc.Max(e.Clock)
+	s.commitWrite(key, e)
 	return nil
 }
 
@@ -115,4 +128,17 @@ func (s *Store) String() string {
 	s.m.Lock()
 	defer s.m.Unlock()
 	return fmt.Sprintf("%+v", s.store)
+}
+
+// waitUntilCurrent returns a function that stalls until the waiting vector
+// clock is not causally from the future.  the write mutex must be held on the
+// store.
+func (s *Store) waitUntilCurrent(waiting clock.VectorClock) error {
+	for {
+		// As long as this clock is not from the future, we can apply it.
+		if cmp := waiting.Compare(s.vc); cmp != clock.Greater {
+			return nil
+		}
+		s.vcCond.Wait()
+	}
 }

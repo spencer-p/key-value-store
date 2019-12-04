@@ -273,4 +273,29 @@ func TestCausality(t *testing.T) {
 			t.Errorf("Read x gave err=%v, e=%v, ok=%t, c=%v", err, e, ok, c)
 		}
 	})
+
+	t.Run("multistep gossip", func(t *testing.T) {
+		// one write happens locally.
+		// another writes jumps across many nodes before us.
+		s := New("a")
+		go func() {
+			err, _, _ := s.Write(clock.VectorClock{}, "x", "1")
+			if err != nil {
+				t.Errorf("Failed to write x=1: %v", err)
+			}
+		}()
+		go func() {
+			err := s.ImportEntry("y", Entry{
+				Value: "2",
+				Clock: clock.VectorClock{"b": 1, "c": 1},
+			})
+			if err != nil {
+				t.Errorf("Failed to gossip y=2 from b: %v", err)
+			}
+		}()
+
+		// this first read got its context from ???
+		shouldRead(t, s, clock.VectorClock{"a": 2, "b": 1, "c": 1}, "x", "1")
+		shouldRead(t, s, clock.VectorClock{"c": 1}, "y", "2")
+	})
 }

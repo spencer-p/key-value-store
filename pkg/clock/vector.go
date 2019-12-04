@@ -2,6 +2,8 @@ package clock
 
 type VectorClock map[string]uint64
 
+// Compare determines the relationship between two vector clocks.
+// a may be less than b, equal to b, greater than b, or there may be no comparison.
 func (a VectorClock) Compare(b VectorClock) CompareResult {
 	// Determine if the scalars are all pairwise equal, less than or equal, OR
 	// greater than or equal in one pass.
@@ -42,10 +44,9 @@ func (a VectorClock) Compare(b VectorClock) CompareResult {
 	return NoRelation
 }
 
-// OneUp returns true if a is b plus one for only one key, which is returned as the second argument.
-// The values for the key in self are completely ignored.
-func (a VectorClock) OneUpExcept(self string, b VectorClock) (bool, string) {
-	oneupkey := ""
+// OneUp returns true if for all k, the difference between a[k] and b[k] is one
+// or less except for k = self.
+func (a VectorClock) OneUpExcept(self string, b VectorClock) bool {
 	for k := range allKeys(a, b) {
 		// Skip self
 		if k == self {
@@ -60,18 +61,16 @@ func (a VectorClock) OneUpExcept(self string, b VectorClock) (bool, string) {
 			b[k] = 0
 		}
 
-		// Test oneup property
-		if a[k] == b[k]+1 {
-			if oneupkey != "" {
-				return false, ""
-			}
-			oneupkey = k
+		// Not true if difference is greater than 1
+		if (a[k] > b[k]+1) || (b[k] > a[k]+1) {
+			return false
 		}
 	}
 
-	return oneupkey != "", oneupkey
+	return true
 }
 
+// Increment increases the value for a given key by one.
 func (a VectorClock) Increment(k string) {
 	cur, ok := a[k]
 	if !ok {
@@ -80,6 +79,16 @@ func (a VectorClock) Increment(k string) {
 	a[k] = cur + 1
 }
 
+// Max modifies a to be the pairwise max of a and b.
+func (a VectorClock) Max(b VectorClock) {
+	for k := range allKeys(a, b) {
+		if a[k] < b[k] {
+			a[k] = b[k]
+		}
+	}
+}
+
+// Copy returns a new identical vector clock.
 func (a VectorClock) Copy() VectorClock {
 	b := make(VectorClock)
 	for k := range a {
@@ -88,13 +97,22 @@ func (a VectorClock) Copy() VectorClock {
 	return b
 }
 
+// allKeys zips together all the keys for two clocks.
+// If any key is missing from one but not the other, it is
+// defaulted to zero in the clock missing the key.
 func allKeys(a, b VectorClock) map[string]struct{} {
 	result := make(map[string]struct{})
 	for k := range a {
 		result[k] = struct{}{}
+		if _, ok := b[k]; !ok {
+			b[k] = 0
+		}
 	}
 	for k := range b {
 		result[k] = struct{}{}
+		if _, ok := a[k]; !ok {
+			a[k] = 0
+		}
 	}
 	return result
 }
