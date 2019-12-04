@@ -44,9 +44,10 @@ func (a VectorClock) Compare(b VectorClock) CompareResult {
 	return NoRelation
 }
 
-// OneUp returns true if for all k, the difference between a[k] and b[k] is one
-// or less except for k = self.
-func (a VectorClock) OneUpExcept(self string, b VectorClock) bool {
+// OneUp returns true if a is b plus one for only one key, which is returned as the second argument.
+// The values for the key in self are completely ignored.
+func (a VectorClock) OneUpExcept(self string, b VectorClock) (bool, string) {
+	oneupkey := ""
 	for k := range allKeys(a, b) {
 		// Skip self
 		if k == self {
@@ -61,13 +62,16 @@ func (a VectorClock) OneUpExcept(self string, b VectorClock) bool {
 			b[k] = 0
 		}
 
-		// Not true if difference is greater than 1
-		if (a[k] > b[k]+1) || (b[k] > a[k]+1) {
-			return false
+		// Test oneup property
+		if a[k] == b[k]+1 {
+			if oneupkey != "" {
+				return false, ""
+			}
+			oneupkey = k
 		}
 	}
 
-	return true
+	return oneupkey != "", oneupkey
 }
 
 // Increment increases the value for a given key by one.

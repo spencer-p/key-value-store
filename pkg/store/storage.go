@@ -69,8 +69,8 @@ func (s *Store) ImportEntry(key string, e Entry) error {
 	defer s.m.Unlock()
 
 	for {
-		if e.Clock.OneUpExcept(s.addr, s.vc) {
-			// One atomic update from other nodes.
+		if canApply, _ := e.Clock.OneUpExcept(s.addr, s.vc); canApply {
+			// One atomic update from another node.
 			break
 		}
 		s.vcCond.Wait()

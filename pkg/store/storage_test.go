@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/spencer-p/cse138/pkg/clock"
-	"github.com/spencer-p/cse138/pkg/uuid"
 )
 
 const (
@@ -257,61 +256,38 @@ func TestCausality(t *testing.T) {
 		shouldRead(t, s, clock.VectorClock{Bob: 2}, "z", "3")
 	})
 
-	t.Run("conflicting writes are resolved", func(t *testing.T) {
-		s := New(Alice)
-		_, _, _ = s.Write(clock.VectorClock{}, "x", "1")
-		_, _, _ = s.Write(clock.VectorClock{}, "y", "2")
+	/*
+		t.Run("conflicting writes are resolved", func(t *testing.T) {
+			s := New(Alice)
+			_, _, _ = s.Write(clock.VectorClock{}, "x", "1")
+			_, _, _ = s.Write(clock.VectorClock{}, "y", "2")
 
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			err := s.ImportEntry("y", Entry{
-				Value: "dominant2",
-				Clock: clock.VectorClock{Bob: 1},
-			})
-			if err != nil {
-				t.Errorf("Failed to gossip y=dominant2 from b: %v", err)
-			}
-			wg.Done()
-		}()
-		go func() {
-			err := s.ImportEntry("x", Entry{
-				Value: "dominant1",
-				Clock: clock.VectorClock{Bob: 2},
-			})
-			if err != nil {
-				t.Errorf("Failed to gossip x=dominant1 from b: %v", err)
-			}
-			wg.Done()
-		}()
-		wg.Wait()
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				err := s.ImportEntry("y", Entry{
+					Value: "dominant2",
+					Clock: clock.VectorClock{Bob: 1},
+				})
+				if err != nil {
+					t.Errorf("Failed to gossip y=dominant2 from b: %v", err)
+				}
+				wg.Done()
+			}()
+			go func() {
+				err := s.ImportEntry("x", Entry{
+					Value: "dominant1",
+					Clock: clock.VectorClock{Bob: 2},
+				})
+				if err != nil {
+					t.Errorf("Failed to gossip x=dominant1 from b: %v", err)
+				}
+				wg.Done()
+			}()
+			wg.Wait()
 
-		shouldRead(t, s, clock.VectorClock{}, "x", "dominant1")
-		shouldRead(t, s, clock.VectorClock{}, "y", "dominant2")
-	})
-
-	t.Run("multistep gossip", func(t *testing.T) {
-		// one write happens locally.
-		// another writes jumps across many nodes before us.
-		s := New(Alice)
-		go func() {
-			err, _, _ := s.Write(clock.VectorClock{}, "x", "1")
-			if err != nil {
-				t.Errorf("Failed to write x=1: %v", err)
-			}
-		}()
-		go func() {
-			err := s.ImportEntry("y", Entry{
-				Value: "2",
-				Clock: clock.VectorClock{Bob: 1, Carol: 1},
-			})
-			if err != nil {
-				t.Errorf("Failed to gossip y=2 from b: %v", err)
-			}
-		}()
-
-		// this first read got its context from ???
-		shouldRead(t, s, clock.VectorClock{Alice: 2, Bob: 1, Carol: 1}, "x", "1")
-		shouldRead(t, s, clock.VectorClock{Carol: 1}, "y", "2")
-	})
+			shouldRead(t, s, clock.VectorClock{}, "x", "dominant1")
+			shouldRead(t, s, clock.VectorClock{}, "y", "dominant2")
+		})
+	*/
 }
