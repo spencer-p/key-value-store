@@ -120,11 +120,15 @@ func (s *Store) Read(key string) (string, bool) {
 	s.m.RLock()
 	defer s.m.RUnlock()
 
-	value := s.Store[key].Value
+	keyInfo := s.Store[key]
+	var value string
 
 	var ok = false
-	if value != "" {
+	if keyInfo != nil {
 		ok = true
+		value = keyInfo.Value
+	} else {
+		value = ""
 	}
 	log.Printf("Reading %q=%q\n", key, value)
 
