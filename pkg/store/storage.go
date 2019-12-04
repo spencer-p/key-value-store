@@ -171,7 +171,12 @@ func (s *Store) NumKeys(tcausal clock.VectorClock) (
 		return
 	}
 
-	count = len(s.store)
+	// count only not deleted keys
+	for k := range s.store {
+		if !s.store[k].Deleted {
+			count += 1
+		}
+	}
 	return
 }
 
