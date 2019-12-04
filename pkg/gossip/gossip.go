@@ -55,7 +55,6 @@ func (m *Manager) relayGossip() {
 			continue
 		}
 
-		log.Println("Relay Gossip")
 		gp := m.findGossip(nodeAddr)
 
 		if len(gp.KeyVals) == 0 {
@@ -102,14 +101,12 @@ func (m *Manager) relayGossip() {
 func (m *Manager) findGossip(replicaAddress string) *GossipPayload {
 	gp := newGossipPayload(m.address)
 
-	log.Println("Find Gossip")
 	// loop through all keys in the store
 	for key, val := range m.state.Store {
 		nodeClock := (*val.Vec)[m.address]
 		replicaClock := (*val.Vec)[replicaAddress]
 		if nodeClock > replicaClock {
 			gp.KeyVals[key] = val
-			(*val.Vec)[replicaAddress] = nodeClock
 		}
 	}
 	return gp
