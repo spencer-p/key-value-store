@@ -51,6 +51,7 @@ func (s *State) getHandler(in types.Input, res *types.Response) {
 		res.Message = msg.GetSuccess
 		res.Value = value
 	} else {
+		log.Println("does not exist")
 		res.Error = msg.KeyDNE
 		res.Status = http.StatusNotFound
 	}
