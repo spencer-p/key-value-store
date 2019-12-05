@@ -3,6 +3,8 @@ package hash
 import (
 	"testing"
 
+	"github.com/spencer-p/cse138/pkg/types"
+
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -41,10 +43,12 @@ func TestEltsEqual(t *testing.T) {
 }
 
 func TestShardMembers(t *testing.T) {
-	m := NewModulo(3)
-	m.Set([]string{"a", "b", "c", "d", "e", "f"})
+	m := New(types.View{
+		Members:    []string{"a", "b", "c", "d", "e", "f"},
+		ReplFactor: 3,
+	})
 
-	if diff := cmp.Diff(m.ShardMembers(0), []string{"a", "b", "c"}); diff != "" {
+	if diff := cmp.Diff(m.GetReplicas(0), []string{"a", "b", "c"}); diff != "" {
 		t.Errorf("did not get correct shard (-got,+want): %s", diff)
 	}
 }

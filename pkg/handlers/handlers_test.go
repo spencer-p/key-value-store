@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/ptr"
-	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 
 	"github.com/google/go-cmp/cmp"
@@ -158,7 +158,10 @@ func TestPut(t *testing.T) {
 
 			// Create one server per set of requests
 			r := mux.NewRouter()
-			s := NewState(FAKE_ADDRESS, []string{FAKE_ADDRESS}, store.NopJournal())
+			s := NewState(context.Background(), FAKE_ADDRESS, types.View{
+				Members:    []string{FAKE_ADDRESS},
+				ReplFactor: 1,
+			})
 			s.Route(r)
 
 			for i, test := range requests {
