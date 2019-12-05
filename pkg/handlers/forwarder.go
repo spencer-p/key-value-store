@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -26,6 +27,8 @@ const (
 	CLIENT_TIMEOUT = 2 * time.Second
 
 	ADDRESS_KEY = "forwading_address"
+
+	SHARD_ENDPOINT = "/kv-store/shards"
 )
 
 func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
@@ -136,4 +139,68 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	result.Status = resp.StatusCode
 	result.Address = nodeAddr
 	return
+}
+
+func (s *State) getShardInfo(view []string) []types.Shard {
+	shardTotal := len(view) / s.repFact
+	log.Println("Shard total", shardTotal)
+	shards := make([]types.Shard, shardTotal)
+	log.Println("Shard total", len(shards))
+	var wg sync.WaitGroup
+
+	log.Println("Requesting key counts from the other shards")
+	shardIndex := shardTotal
+	for i := range shards {
+		wg.Add(1)
+		go func(addr string, shard *types.Shard) {
+			defer wg.Done()
+
+			//TODO Figure out why i starts out as 1
+			log.Println("i is", i)
+			// Set the address and an invalid value before we found out the
+			// actual value
+
+			shard.Address = addr
+			shard.KeyCount = -1
+
+			log.Println(addr)
+			// Don't make a request if it's just ourselves
+			shardIndex = shardIndex - 1 //TODO Replace this with get ID from address method
+			if addr == s.address {
+				shard.Id = s.id
+				shard.KeyCount = s.Store.NumKeys()
+				return
+			}
+
+			// Dispatch a get request to the other node
+			resp, err := s.cli.Get(util.CorrectURL(addr) + SHARD_ENDPOINT + "/" + strconv.Itoa(shardIndex))
+			if err != nil {
+				log.Printf("Failed to send a req to %q: %v\n", addr, err)
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Shard at %q returned %d for key count\n", addr, resp.StatusCode)
+				return
+			}
+
+			// Parse the response
+			var response types.Response
+			if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+				log.Printf("Failed to parse response from %q: %v\n", addr, err)
+				return
+			}
+
+			if response.KeyCount == nil {
+				log.Printf("Response from %q does not have a key count\n", addr)
+				return
+			}
+
+			// We actually got a response!
+			shard.Id = response.ShardId
+			shard.KeyCount = *response.KeyCount
+		}(view[i*s.repFact], &shards[i])
+	}
+
+	wg.Wait()
+	return shards
 }

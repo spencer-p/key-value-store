@@ -26,13 +26,14 @@ type Response struct {
 	// Info about the state of shards
 	Shards   []Shard  `json:"shards,omitempty"`
 	KeyCount *int     `json:"key-count,omitempty"`
-	ShardId  string   `json:"shard-id,omitemptpy"`
+	ShardId  string   `json:"shard-id,omitempty"`
 	Replicas []string `json:"replicas,omitempty"`
 	// Potential forwarding metadata
 	Address string `json:"address,omitempty"`
 }
 
 type Shard struct {
+	Id       string `json:"shard-id,omitempty"`
 	Address  string `json:"address"`
 	KeyCount int    `json:"key-count"`
 }
