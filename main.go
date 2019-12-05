@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	TIMEOUT = 5 * time.Second
+	TIMEOUT = 10 * time.Minute
 )
 
 type Config struct {
@@ -43,7 +43,7 @@ func main() {
 	// 2. ask the gossip manager for a channel we can send to
 	// 3. give that channel to the handlers
 	journal := make(chan store.Entry, 10)
-	go func() { log.Println("Journalling", <-journal) }()
+	go func() { log.Println("Journaling", <-journal) }()
 	handlers.InitNode(r, env.Address, strings.Split(env.View, ","), journal)
 
 	srv := &http.Server{
