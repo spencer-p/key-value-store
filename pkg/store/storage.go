@@ -68,6 +68,7 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	}
 
 	// Perform the write
+	s.vc.Max(tcausal)
 	replaced = s.commitWrite(Entry{
 		Key:     key,
 		Value:   value,
@@ -110,6 +111,7 @@ func (s *Store) Delete(tcausal clock.VectorClock, key string) (
 	}
 
 	// Perform the delete if we have the object
+	s.vc.Max(tcausal)
 	deleted = s.commitWrite(Entry{Key: key, Deleted: true}, true)
 	return
 }
@@ -129,7 +131,7 @@ func (s *Store) commitWrite(e Entry, shouldJournal bool) (replaced bool) {
 	// Perform the write
 	s.store[e.Key] = e
 	if !e.Deleted {
-		log.Printf("Committed %q at t=%v\n", e.Value, s.vc)
+		log.Printf("Committed %q=%q at t=%v\n", e.Key, e.Value, s.vc)
 	} else {
 		log.Printf("Committed delete of %q at t=%v\n", e.Key, s.vc)
 	}

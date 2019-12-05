@@ -46,11 +46,8 @@ func (s *State) shouldForwardToNode(r *http.Request, key, nodeAddr string, err e
 		return false
 	}
 	if nodeAddr == s.address {
-		log.Printf("Key %q is serviced by this node\n", key)
 		return false
 	} else {
-		log.Printf("Key %q is serviced by %q\n", key, nodeAddr)
-
 		// Store the target node address in the http request context.
 		ctx := context.WithValue(r.Context(), ADDRESS_KEY, nodeAddr)
 		*r = *(r.WithContext(ctx))
@@ -77,6 +74,8 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 		result.Error = msg.BadForwarding
 		return
 	}
+
+	log.Printf("Forwarding req w/ %q to %q\n", mux.Vars(r)["key"], nodeAddr)
 
 	target, err := url.Parse(util.CorrectURL(nodeAddr))
 	if err != nil {
