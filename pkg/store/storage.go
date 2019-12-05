@@ -65,7 +65,6 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
-	log.Printf("Write %q at %v (not > %v)\n", key, tcausal, s.vc)
 
 	// Perform the write
 	replaced = s.commitWrite(key, Entry{
@@ -83,7 +82,6 @@ func (s *Store) ImportEntry(key string, e Entry) error {
 	if err := s.waitForGossip(e.Clock); err != nil {
 		return err
 	}
-	log.Printf("Import %q at %v (not bad wrt %v)\n", key, e.Clock, s.vc)
 
 	s.vc.Max(e.Clock)
 	s.commitWrite(key, e)
@@ -133,7 +131,11 @@ func (s *Store) commitWrite(key string, e Entry) (replaced bool) {
 
 	// Perform the write
 	s.store[key] = e
-	log.Printf("Committed %q=%q at t=%v\n", key, e.Value, s.vc)
+	if !e.Deleted {
+		log.Printf("Committed %q=%q at t=%v\n", key, e.Value, s.vc)
+	} else {
+		log.Printf("Committed delete of %q at t=%v\n", key, s.vc)
+	}
 
 	// Make a copy that cannot interact with the store's copy;
 	// then send it to the journal
@@ -157,7 +159,6 @@ func (s *Store) Read(tcausal clock.VectorClock, key string) (
 	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
-	log.Printf("Read %q at %v (not > %v)\n", key, tcausal, s.vc)
 
 	// Perform the read. Act like it doesn't exist if it was deleted.
 	e, ok = s.store[key]

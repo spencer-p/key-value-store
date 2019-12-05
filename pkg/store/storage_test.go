@@ -302,6 +302,30 @@ func TestCausality(t *testing.T) {
 		})
 	})
 
+	t.Run("idempotent deletes", func(t *testing.T) {
+		// A reader wants the value of x after three events take place.
+		// We apply (in order), a write, two deletes, and a write.
+		// Both of the deletes should count as a single event because
+		// the second delete is *idempotent*.
+		s := New(Alice, []string{Alice}, journal)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			shouldRead(t, s, clock.VectorClock{Alice: 3}, "x", "2")
+			wg.Done()
+		}()
+
+		go func() {
+			s.Write(clock.VectorClock{}, "x", "1")
+			s.Delete(clock.VectorClock{Alice: 1}, "x")
+			s.Delete(clock.VectorClock{Alice: 2}, "x")
+			s.Write(clock.VectorClock{Alice: 2}, "x", "2")
+		}()
+
+		wg.Wait()
+	})
+
 	/*
 		t.Run("conflicting writes are resolved", func(t *testing.T) {
 			s := New(Alice)
