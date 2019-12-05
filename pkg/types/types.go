@@ -34,7 +34,7 @@ type Response struct {
 
 type Shard struct {
 	Id       string `json:"shard-id,omitempty"`
-	Address  string `json:"address"`
+	Address  string `json:"address,omitempty"`
 	KeyCount int    `json:"key-count"`
 }
 

@@ -92,6 +92,11 @@ func (s *State) idHandler(in types.Input, res *types.Response) {
 	res.Replicas = s.Store.Replicas
 }
 
+func (s *State) shardsHandler(in types.Input, res *types.Response) {
+	res.Shards = s.getShardInfo(s.hash.Members())
+
+}
+
 func InitNode(r *mux.Router, addr string, repFact int, replicas []string, view []string, shardId string) *State {
 	s := NewState(addr, replicas, view, repFact, shardId)
 	s.Route(r, repFact)
@@ -122,6 +127,7 @@ func (s *State) Route(r *mux.Router, repFact int) {
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
+	r.HandleFunc("/kv-store/shards", types.WrapHTTP(s.shardsHandler)).Methods(http.MethodGet)
 	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", s.forwardMessage).MatcherFunc(s.shouldForwardId)
 	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", types.WrapHTTP(s.idHandler)).Methods(http.MethodGet)
 
