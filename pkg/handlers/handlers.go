@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"net/http"
 
@@ -100,15 +101,16 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func InitNode(r *mux.Router, addr string, view []string, journal chan<- store.Entry) {
-	s := NewState(addr, view, journal)
+func InitNode(ctx context.Context, r *mux.Router, addr string, view []string) {
+	s := NewState(ctx, addr, view)
 	s.Route(r)
 }
 
-func NewState(addr string, view []string, journal chan<- store.Entry) *State {
+func NewState(ctx context.Context, addr string, view []string) *State {
+	journal := make(chan store.Entry, 10)
 	s := &State{
 		store:   store.New(addr, []string{addr}, journal),
-		hash:    hash.NewModulo(1 /*TODO replicacation factor*/),
+		hash:    hash.NewModulo(2 /*TODO replicacation factor*/),
 		address: addr,
 		cli: &http.Client{
 			Timeout: CLIENT_TIMEOUT,
@@ -119,10 +121,14 @@ func NewState(addr string, view []string, journal chan<- store.Entry) *State {
 	s.hash.Set(view)
 	s.store.SetShard(s.hash.ShardMembers(s.hash.ShardOf(addr)))
 
+	log.Println("Starting gossip dispatcher")
+	go s.dispatchGossip(ctx, journal)
+
 	return s
 }
 
 func (s *State) Route(r *mux.Router) {
+	r.HandleFunc("/kv-store/gossip", s.receiveGossip).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 

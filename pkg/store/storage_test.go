@@ -205,7 +205,8 @@ func TestCausality(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			err := s.ImportEntry("x", Entry{
+			err := s.ImportEntry(Entry{
+				Key:   "x",
 				Value: "1",
 				Clock: clock.VectorClock{Bob: 1},
 			})
@@ -235,7 +236,8 @@ func TestCausality(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			err := s.ImportEntry("y", Entry{
+			err := s.ImportEntry(Entry{
+				Key:   "y",
 				Value: "2",
 				Clock: clock.VectorClock{Bob: 1},
 			})
@@ -245,7 +247,8 @@ func TestCausality(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			err := s.ImportEntry("z", Entry{
+			err := s.ImportEntry(Entry{
+				Key:   "z",
 				Value: "3",
 				Clock: clock.VectorClock{Bob: 2},
 			})
@@ -275,7 +278,8 @@ func TestCausality(t *testing.T) {
 			}()
 
 			go func() {
-				err := s.ImportEntry("x", Entry{
+				err := s.ImportEntry(Entry{
+					Key:   "x",
 					Value: "1",
 					Clock: clock.VectorClock{Bob: 1},
 				})

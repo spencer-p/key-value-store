@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/handlers"
-	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/util"
 
 	"github.com/gorilla/mux"
@@ -35,16 +34,13 @@ func main() {
 	envconfig.MustProcess("", &env)
 	log.Printf("Configured: %+v\n", env)
 
+	// Create a cancelable context so we can kill processes
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	// TODO this is what i would hope to see:
-	// 1. make some sort of gossip manager
-	// 2. ask the gossip manager for a channel we can send to
-	// 3. give that channel to the handlers
-	journal := make(chan store.Entry, 10)
-	go func() { log.Println("Journaling", <-journal) }()
-	handlers.InitNode(r, env.Address, strings.Split(env.View, ","), journal)
+	handlers.InitNode(ctx, r, env.Address, strings.Split(env.View, ","))
 
 	srv := &http.Server{
 		Handler:      r,
@@ -68,5 +64,6 @@ func main() {
 
 	log.Println("Shutdown signal received, exiting...")
 
+	cancel()
 	srv.Shutdown(context.Background())
 }
