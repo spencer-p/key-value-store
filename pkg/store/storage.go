@@ -92,13 +92,24 @@ func (s *Store) ImportEntry(key string, e Entry) error {
 }
 
 // Delete deletes a key, returning true if it was deleted.
-func (s *Store) Delete(tcausal clock.VectorClock, key string) (deleted bool, currentClock clock.VectorClock) {
+func (s *Store) Delete(tcausal clock.VectorClock, key string) (
+	err error,
+	deleted bool,
+	currentClock clock.VectorClock) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
-	if err := s.waitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
+
+	// Don't perform a delete on a key/value that doesn't exist
+	entry, exists := s.store[key]
+	if !exists || entry.Deleted {
+		return
+	}
+
+	// Perform the delete if we have the object
 	deleted = s.commitWrite(key, Entry{Deleted: true})
 	return
 }

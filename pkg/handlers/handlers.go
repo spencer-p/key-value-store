@@ -27,7 +27,13 @@ func (s *State) deleteHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	ok, vc := s.store.Delete(in.CausalCtx, in.Key)
+	err, ok, vc := s.store.Delete(in.CausalCtx, in.Key)
+	if err != nil {
+		res.Status = http.StatusServiceUnavailable
+		res.Error = msg.Unavailable
+		return
+	}
+
 	res.Exists = &ok
 	res.CausalCtx = vc
 
@@ -102,7 +108,7 @@ func InitNode(r *mux.Router, addr string, view []string, journal chan<- store.En
 func NewState(addr string, view []string, journal chan<- store.Entry) *State {
 	s := &State{
 		store:   store.New(addr, []string{addr}, journal),
-		hash:    hash.NewModulo(1 /*TODO replica count*/),
+		hash:    hash.NewModulo(1 /*TODO replicacation factor*/),
 		address: addr,
 		cli: &http.Client{
 			Timeout: CLIENT_TIMEOUT,
