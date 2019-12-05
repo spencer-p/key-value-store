@@ -16,9 +16,10 @@ var (
 // Entry describes a full data point in the store.
 // The value is required. Other fields are semi-optional depending on the context.
 type Entry struct {
-	Key, Value string
-	Deleted    bool
-	Clock      clock.VectorClock
+	Key     string            `json:"key"`
+	Value   string            `json:"value"`
+	Deleted bool              `json:"deleted"`
+	Clock   clock.VectorClock `json:"clock"`
 }
 
 // Store represents a volatile key value store.
@@ -67,15 +68,16 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	}
 
 	// Perform the write
-	replaced = s.commitWrite(key, Entry{
+	replaced = s.commitWrite(Entry{
+		Key:     key,
 		Value:   value,
 		Deleted: false,
-	})
+	}, true)
 	return
 }
 
 // ImportEntry imports an existing entry from another store.
-func (s *Store) ImportEntry(key string, e Entry) error {
+func (s *Store) ImportEntry(e Entry) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -84,7 +86,7 @@ func (s *Store) ImportEntry(key string, e Entry) error {
 	}
 
 	s.vc.Max(e.Clock)
-	s.commitWrite(key, e)
+	s.commitWrite(e, false)
 
 	return nil
 }
@@ -108,13 +110,13 @@ func (s *Store) Delete(tcausal clock.VectorClock, key string) (
 	}
 
 	// Perform the delete if we have the object
-	deleted = s.commitWrite(key, Entry{Deleted: true})
+	deleted = s.commitWrite(Entry{Key: key, Deleted: true}, true)
 	return
 }
 
-func (s *Store) commitWrite(key string, e Entry) (replaced bool) {
+func (s *Store) commitWrite(e Entry, shouldJournal bool) (replaced bool) {
 	// Check if the entry previously existed
-	oldentry, exists := s.store[key]
+	oldentry, exists := s.store[e.Key]
 	replaced = exists && oldentry.Deleted != true
 
 	// Update the clock in anticipation of the event
@@ -124,23 +126,20 @@ func (s *Store) commitWrite(key string, e Entry) (replaced bool) {
 	// Mark the clock
 	e.Clock = s.vc.Copy()
 
-	// Double check the key is good
-	if e.Key == "" {
-		e.Key = key
-	}
-
 	// Perform the write
-	s.store[key] = e
+	s.store[e.Key] = e
 	if !e.Deleted {
-		log.Printf("Committed %q=%q at t=%v\n", key, e.Value, s.vc)
+		log.Printf("Committed %q at t=%v\n", e.Value, s.vc)
 	} else {
-		log.Printf("Committed delete of %q at t=%v\n", key, s.vc)
+		log.Printf("Committed delete of %q at t=%v\n", e.Key, s.vc)
 	}
 
-	// Make a copy that cannot interact with the store's copy;
-	// then send it to the journal
-	e.Clock = e.Clock.Copy()
-	s.journal <- e
+	if shouldJournal {
+		// Make a copy that cannot interact with the store's copy;
+		// then send it to the journal
+		e.Clock = e.Clock.Copy()
+		s.journal <- e
+	}
 
 	return replaced
 }
@@ -195,6 +194,14 @@ func (s *Store) SetShard(members []string) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	s.shard = members
+}
+
+// BumpClockForNode informs the store that another node has processed an event of ours.
+func (s *Store) BumpClockForNode(member string) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.vc.Increment(member)
+	s.vcCond.Broadcast()
 }
 
 func (s *Store) String() string {

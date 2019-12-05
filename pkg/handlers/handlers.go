@@ -2,6 +2,8 @@
 package handlers
 
 import (
+	"context"
+	"log"
 	"net/http"
 
 	"github.com/spencer-p/cse138/pkg/hash"
@@ -99,22 +101,26 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func NewState(addr string, view types.View, journal chan<- store.Entry) *State {
+func NewState(ctx context.Context, addr string, view types.View) *State {
+	journal := make(chan store.Entry, 10)
+	hash := hash.New(view)
 	s := &State{
-		store:   store.New(addr, []string{addr}, journal),
-		hash:    hash.New(view),
+		store:   store.New(addr, hash.GetReplicas(hash.GetShardId(addr)), journal),
+		hash:    hash,
 		address: addr,
 		cli: &http.Client{
 			Timeout: CLIENT_TIMEOUT,
 		},
 	}
 
-	s.store.SetShard(s.hash.GetReplicas(s.hash.GetShardId(addr)))
+	log.Println("Starting gossip dispatcher")
+	go s.dispatchGossip(ctx, journal)
 
 	return s
 }
 
 func (s *State) Route(r *mux.Router) {
+	r.HandleFunc("/kv-store/gossip", s.receiveGossip).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
