@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/spencer-p/cse138/pkg/clock"
@@ -22,22 +21,21 @@ const (
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
-	view := strings.Split(in.View, ",")
-	if len(view) == 0 {
+	if len(in.View.Members) == 0 || in.View.ReplFactor == 0 {
 		res.Status = http.StatusBadRequest
 		res.Error = msg.FailedToParse
 		return
 	}
 
-	log.Printf("Received view change with addrs %v\n", view)
+	log.Printf("Received view change %#v\n", in.View)
 
-	viewIsNew := s.hash.TestAndSet(view)
+	viewIsNew := s.hash.TestAndSet(in.View)
 	if viewIsNew {
 		log.Println("This view is new information")
 		// We just set a new view. We have keys that need to move to other
 		// nodes.
 		batches := s.getBatches()
-		offloaded, err := s.dispatchBatches(view, batches)
+		offloaded, err := s.dispatchBatches(in.View, batches)
 		if err != nil {
 			log.Println("Failed to offload some keys:", err)
 		}
@@ -59,7 +57,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	// response to the oracle
 	log.Println("Cluster's view change is committed to all nodes")
 	res.Message = msg.ViewChangeSuccess
-	res.Shards = s.getKeyCounts(view)
+	res.Shards = s.getKeyCounts(in.View.Members) // TODO use the hash object
 }
 
 // getBatches retrieves all batches of keys that should be on other nodes and
@@ -95,20 +93,20 @@ func (s *State) deleteEntries(entries []types.Entry) {
 
 // dispatchBatches forwards a view change to all other nodes in the view.
 // A list of batches that were successfully dispatched is returned with an error.
-func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry) ([]types.Entry, error) {
+func (s *State) dispatchBatches(view types.View, batches map[string][]types.Entry) ([]types.Entry, error) {
 	var wg sync.WaitGroup
 	var finalerr error
 	deletech := make(chan []types.Entry)
 	donech := make(chan struct{})
 
 	// Spin up a goroutine to send each batch to each node
-	for i := range view {
+	for i := range view.Members {
 		wg.Add(1)
 		go func(addr string, batch []types.Entry) {
 			defer wg.Done()
 			log.Printf("Sending view/batch with %d keys to %q\n", len(batch), addr)
 			err := s.sendBatch(addr, types.Input{
-				View:  strings.Join(view, ","),
+				View:  view,
 				Batch: batch,
 			})
 			if err != nil {
@@ -117,7 +115,7 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 				return
 			}
 			deletech <- batch
-		}(view[i], batches[view[i]])
+		}(view.Members[i], batches[view.Members[i]])
 	}
 
 	// Wait for all the goroutines to terminate.

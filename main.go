@@ -13,6 +13,7 @@ import (
 
 	"github.com/spencer-p/cse138/pkg/handlers"
 	"github.com/spencer-p/cse138/pkg/store"
+	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 
 	"github.com/gorilla/mux"
@@ -25,9 +26,10 @@ const (
 
 type Config struct {
 	// Config VIEW and ADDRESS
-	Port    string `envconfig:"PORT" required:"true"`
-	View    string `envconfig:"VIEW" required:"true"`
-	Address string `envconfig:"ADDRESS" required:"true"`
+	Port       string `envconfig:"PORT" required:"true"`
+	View       string `envconfig:"VIEW" required:"true"`
+	Address    string `envconfig:"ADDRESS" required:"true"`
+	ReplFactor int    `envconfig:"REPL_FACTOR" required:"true"`
 }
 
 func main() {
@@ -44,7 +46,11 @@ func main() {
 	// 3. give that channel to the handlers
 	journal := make(chan store.Entry, 10)
 	go func() { log.Println("Journaling", <-journal) }()
-	handlers.InitNode(r, env.Address, strings.Split(env.View, ","), journal)
+	view := types.View{
+		Members:    strings.Split(env.View, ","),
+		ReplFactor: env.ReplFactor,
+	}
+	handlers.NewState(env.Address, view, journal).Route(r)
 
 	srv := &http.Server{
 		Handler:      r,

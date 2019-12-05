@@ -30,12 +30,21 @@ const (
 func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 	key := path.Base(r.URL.Path)
 	nodeAddr, err := s.hash.Get(key)
+	return s.shouldForwardToNode(r, key, nodeAddr, err)
+}
+
+func (s *State) shouldForwardRead(r *http.Request, rm *mux.RouteMatch) bool {
+	key := path.Base(r.URL.Path)
+	nodeAddr, err := s.hash.GetAny(key)
+	return s.shouldForwardToNode(r, key, nodeAddr, err)
+}
+
+func (s *State) shouldForwardToNode(r *http.Request, key, nodeAddr string, err error) bool {
 	if err != nil {
 		log.Printf("Failed to get address for key %q: %v\n", key, err)
 		log.Println("This node will handle the request")
 		return false
 	}
-
 	if nodeAddr == s.address {
 		log.Printf("Key %q is serviced by this node\n", key)
 		return false

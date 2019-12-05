@@ -11,6 +11,11 @@ import (
 	"github.com/spencer-p/cse138/pkg/msg"
 )
 
+type View struct {
+	Members    []string `json:"view"`
+	ReplFactor int      `json:"repl-factor"`
+}
+
 type Response struct {
 	// The status code is not marshalled to JSON. The wrapper function uses this
 	// to write the HTTP response body. Defaults to 200.
@@ -44,7 +49,7 @@ type Input struct {
 	Entry `json:",inline"`
 
 	// A View and Batch is only used for view change requests.
-	View  string  `json:"view"`
+	View  View    `json:",inline"`
 	Batch []Entry `json:"diff"`
 
 	// Context the request thinks is current
