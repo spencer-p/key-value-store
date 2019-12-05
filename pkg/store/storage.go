@@ -24,6 +24,7 @@ type Entry struct {
 // Store represents a volatile key value store.
 type Store struct {
 	addr    string
+	shard   []string
 	store   map[string]Entry
 	m       *sync.RWMutex
 	vc      clock.VectorClock
@@ -33,10 +34,11 @@ type Store struct {
 
 // New constructs an empty store that resides at the given address or unique ID.
 // The callback channel is issued all new modifications to the store (like a journal).
-func New(selfAddr string, callback chan<- Entry) *Store {
+func New(selfAddr string, shard []string, callback chan<- Entry) *Store {
 	var mtx sync.RWMutex
 	return &Store{
 		addr:    selfAddr,
+		shard:   shard,
 		store:   make(map[string]Entry),
 		m:       &mtx,
 		vc:      clock.VectorClock{},
@@ -78,12 +80,8 @@ func (s *Store) ImportEntry(key string, e Entry) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	for {
-		if canApply, _ := e.Clock.OneUpExcept(s.addr, s.vc); canApply {
-			// One atomic update from another node.
-			break
-		}
-		s.vcCond.Wait()
+	if err := s.waitForGossip(e.Clock); err != nil {
+		return err
 	}
 	log.Printf("Import %q at %v (not bad wrt %v)\n", key, e.Clock, s.vc)
 
@@ -175,6 +173,13 @@ func (s *Store) NumKeys(tcausal clock.VectorClock) (
 	return
 }
 
+// SetShard replaces the current shard member list this store thinks it is on.
+func (s *Store) SetShard(members []string) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.shard = members
+}
+
 func (s *Store) String() string {
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -184,10 +189,22 @@ func (s *Store) String() string {
 // waitUntilCurrent returns a function that stalls until the waiting vector
 // clock is not causally from the future.  the write mutex must be held on the
 // store.
-func (s *Store) waitUntilCurrent(waiting clock.VectorClock) error {
+func (s *Store) waitUntilCurrent(incoming clock.VectorClock) error {
+	incoming = incoming.Subset(s.shard)
 	for {
 		// As long as this clock is not from the future, we can apply it.
-		if cmp := waiting.Compare(s.vc); cmp != clock.Greater {
+		if cmp := incoming.Compare(s.vc.Subset(s.shard)); cmp != clock.Greater {
+			return nil
+		}
+		s.vcCond.Wait()
+	}
+}
+
+func (s *Store) waitForGossip(incoming clock.VectorClock) error {
+	incoming = incoming.Subset(s.shard)
+	for {
+		if canApply, _ := incoming.OneUpExcept(s.addr, s.vc.Subset(s.shard)); canApply {
+			// One atomic update from another node.
 			return nil
 		}
 		s.vcCond.Wait()

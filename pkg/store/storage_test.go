@@ -63,7 +63,7 @@ func TestCausality(t *testing.T) {
 	}()
 
 	t.Run("writes apply causally", func(t *testing.T) {
-		s := New(Alice, journal)
+		s := New(Alice, []string{Alice}, journal)
 
 		dowrites(s, WriteBatch{{
 			id:    "a",
@@ -110,7 +110,7 @@ func TestCausality(t *testing.T) {
 	t.Run("writes can interleave", func(t *testing.T) {
 		// have two "clients" write separate histories
 
-		s := New(Alice, journal)
+		s := New(Alice, []string{Alice}, journal)
 		var wg sync.WaitGroup
 		wg.Add(2)
 
@@ -155,7 +155,7 @@ func TestCausality(t *testing.T) {
 
 	t.Run("reads block until applicable", func(t *testing.T) {
 		done := make(chan struct{})
-		s := New(Alice, journal)
+		s := New(Alice, []string{Alice}, journal)
 		var e Entry
 		var ok bool
 		go func() {
@@ -194,7 +194,7 @@ func TestCausality(t *testing.T) {
 
 	t.Run("multireplicant write is handled", func(t *testing.T) {
 		// client writes x to r1, then writes y to r2. Gossip is required before y is written.
-		s := New(Alice, journal)
+		s := New(Alice, []string{Alice, Bob}, journal)
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
@@ -224,7 +224,7 @@ func TestCausality(t *testing.T) {
 		// one write happens locally.
 		// two writes from another store get gossipped in.
 		// a read is performed that expects the gossip values.
-		s := New(Alice, journal)
+		s := New(Alice, []string{Alice, Bob}, journal)
 		var wg sync.WaitGroup
 		wg.Add(3)
 		go func() {
@@ -259,6 +259,47 @@ func TestCausality(t *testing.T) {
 		shouldRead(t, s, clock.VectorClock{Alice: 1}, "x", "1")
 		shouldRead(t, s, clock.VectorClock{Bob: 2}, "y", "2")
 		shouldRead(t, s, clock.VectorClock{Bob: 2}, "z", "3")
+	})
+
+	t.Run("do not care about other shards", func(t *testing.T) {
+		t.Run("when requesting reads", func(t *testing.T) {
+			// someone wants to read a value we haven't seen
+			// and they know things about the other shards too (??)
+			s := New(Alice, []string{Alice, Bob}, journal)
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				shouldRead(t, s, clock.VectorClock{Bob: 1, Carol: 1}, "x", "1")
+				wg.Done()
+			}()
+
+			go func() {
+				err := s.ImportEntry("x", Entry{
+					Value: "1",
+					Clock: clock.VectorClock{Bob: 1},
+				})
+				if err != nil {
+					t.Errorf("Failed to gossip x=1 from b: %v", err)
+				}
+			}()
+
+			wg.Wait()
+		})
+
+		t.Run("when receiving writes", func(t *testing.T) {
+			// Someone has a write with other garbage in the context
+			s := New(Alice, []string{Alice, Bob}, journal)
+
+			go func() {
+				err, _, _ := s.Write(clock.VectorClock{Carol: 1}, "x", "1")
+				if err != nil {
+					t.Errorf("Failed to write x=1: %v", err)
+				}
+			}()
+
+			shouldRead(t, s, clock.VectorClock{Alice: 1, Carol: 1}, "x", "1")
+		})
 	})
 
 	/*

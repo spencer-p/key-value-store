@@ -16,15 +16,17 @@ var (
 
 // Modulo implements simple modulo hashing.
 type Modulo struct {
-	elts []string
-	fnv  hash.Hash32
-	mtx  sync.Mutex // TODO Is this lock necessary?
+	elts       []string
+	replFactor int
+	fnv        hash.Hash32
+	mtx        sync.Mutex // TODO Is this lock necessary?
 }
 
-func NewModulo() *Modulo {
+func NewModulo(replFactor int) *Modulo {
 	return &Modulo{
-		elts: []string{},
-		fnv:  fnv.New32(),
+		elts:       []string{},
+		fnv:        fnv.New32(),
+		replFactor: replFactor,
 	}
 }
 
@@ -43,6 +45,30 @@ func (m *Modulo) Get(key string) (string, error) {
 	i := m.fnv.Sum32() % n
 	return m.elts[i], nil
 
+}
+
+// ShardMembers returns the set of members in the given shard.
+func (m *Modulo) ShardMembers(id int) []string {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	res := make([]string, m.replFactor)
+	copy(res, m.elts[id*m.replFactor:(id+1)*m.replFactor])
+	return res
+}
+
+// ShardOf returns the shard ID of the given member.
+func (m *Modulo) ShardOf(member string) int {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	i := 0
+	for ; i < len(m.elts); i++ {
+		if m.elts[i] == member {
+			break
+		}
+	}
+	return i / m.replFactor
 }
 
 // Members returns the list of nodes in this hash.

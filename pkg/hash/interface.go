@@ -4,6 +4,8 @@ package hash
 type Interface interface {
 	Get(string) (string, error)
 	Members() []string
+	ShardMembers(id int) []string
+	ShardOf(member string) int
 	Set([]string)
 	TestAndSet([]string) bool
 }

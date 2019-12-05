@@ -101,6 +101,20 @@ func (a VectorClock) Copy() VectorClock {
 	return b
 }
 
+// Subset returns a vector clock consisting of the subset of keys given.
+func (a VectorClock) Subset(keys []string) VectorClock {
+	s := VectorClock{}
+	for _, key := range keys {
+		v, ok := a[key]
+		if !ok {
+			s[key] = 0
+		} else {
+			s[key] = v
+		}
+	}
+	return s
+}
+
 // allKeys zips together all the keys for two clocks.
 // If any key is missing from one but not the other, it is
 // defaulted to zero in the clock missing the key.

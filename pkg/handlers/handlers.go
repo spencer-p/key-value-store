@@ -101,8 +101,8 @@ func InitNode(r *mux.Router, addr string, view []string, journal chan<- store.En
 
 func NewState(addr string, view []string, journal chan<- store.Entry) *State {
 	s := &State{
-		store:   store.New(addr, journal),
-		hash:    hash.NewModulo(),
+		store:   store.New(addr, []string{addr}, journal),
+		hash:    hash.NewModulo(1 /*TODO replica count*/),
 		address: addr,
 		cli: &http.Client{
 			Timeout: CLIENT_TIMEOUT,
@@ -111,6 +111,7 @@ func NewState(addr string, view []string, journal chan<- store.Entry) *State {
 
 	log.Println("Adding these node address to members of hash", view)
 	s.hash.Set(view)
+	s.store.SetShard(s.hash.ShardMembers(s.hash.ShardOf(addr)))
 
 	return s
 }
