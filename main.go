@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spencer-p/cse138/pkg/gossip"
 	"github.com/spencer-p/cse138/pkg/handlers"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"

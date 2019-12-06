@@ -91,7 +91,6 @@ func (s *Store) ImportEntry(e Entry) error {
 	if err := s.waitForGossip(e.Clock); err != nil {
 		return err
 	}
-	s.Store[key].Vec.Increment(address)
 
 	s.vc.Max(e.Clock)
 	s.commitWrite(e, false)

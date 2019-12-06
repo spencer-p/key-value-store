@@ -116,6 +116,13 @@ func (m *Hash) GetShardId(member string) int {
 	return i/m.replFactor + 1
 }
 
+func (m *Hash) GetReplicationFactor() int {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	return m.replFactor
+}
+
 // Members returns the list of nodes in this hash.
 func (m *Hash) Members() []string {
 	m.mtx.Lock()

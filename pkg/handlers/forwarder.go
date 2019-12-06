@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
@@ -32,7 +33,7 @@ const (
 
 func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
 	id := path.Base(r.URL.Path)
-	if id == s.id {
+	if id == strconv.Itoa(s.hash.GetShardId(s.address)) {
 		log.Printf("Id %q is serviced by this node\n", id)
 		return false
 	} else {
@@ -47,7 +48,8 @@ func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
 			return false
 		}
 
-		shardIndex := (len(view) / s.repFact) * id
+		replFactor := s.hash.GetReplicationFactor()
+		shardIndex := (len(view) / replFactor) * (id - 1)
 		log.Printf("Id %q is serviced by %q\n", id, view[shardIndex])
 		ctx := context.WithValue(r.Context(), ADDRESS_KEY, view[shardIndex])
 		*r = *(r.WithContext(ctx))
@@ -157,11 +159,10 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (s *State) getShardInfo(view []string) []types.Shard {
-	shardTotal := len(view) / s.repFact
-	log.Println("Shard total", shardTotal)
+func (s *State) getShardInfo(view []string, CausalCtx clock.VectorClock) []types.Shard {
+	replFactor := s.hash.GetReplicationFactor()
+	shardTotal := len(view) / replFactor
 	shards := make([]types.Shard, shardTotal)
-	log.Println("Shard total", len(shards))
 	var wg sync.WaitGroup
 
 	log.Println("Requesting key counts from the other shards")
@@ -180,10 +181,15 @@ func (s *State) getShardInfo(view []string) []types.Shard {
 
 			log.Println(addr)
 			// Don't make a request if it's just ourselves
-			shardIndex = shardIndex - 1 //TODO Replace this with get ID from address method
+			shardIndex = s.hash.GetShardId(addr) //TODO Replace this with get ID from address method
 			if addr == s.address {
-				shard.Id = s.id
-				shard.KeyCount = s.Store.NumKeys()
+				shard.Id = strconv.Itoa(s.hash.GetShardId(addr))
+				err, KeyCount, CausalCtx := s.store.NumKeys(CausalCtx)
+				if err != nil {
+					log.Printf("Failed to get NumKeys for addr %q: %v", addr, err)
+				}
+				_ = CausalCtx
+				shard.KeyCount = KeyCount
 				return
 			}
 
@@ -213,7 +219,7 @@ func (s *State) getShardInfo(view []string) []types.Shard {
 			// We actually got a response!
 			shard.Id = response.ShardId
 			shard.KeyCount = *response.KeyCount
-		}(view[i*s.repFact], &shards[i])
+		}(view[i*replFactor], &shards[i])
 	}
 
 	wg.Wait()

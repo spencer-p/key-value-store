@@ -5,8 +5,8 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 
-	//"github.com/spencer-p/cse138/pkg/gossip"
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
@@ -104,18 +104,25 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) idHandler(in types.Input, res *types.Response) {
-	KeyCount := s.Store.NumKeys()
-	if s.id != in.Key {
+	err, KeyCount, CausalCtx := s.store.NumKeys(in.CausalCtx)
+	if err != nil {
+		log.Println("Error on id handler", err)
+	}
+	id := s.hash.GetShardId(s.address)
+	if strconv.Itoa(id) != in.Key {
 		log.Println("Wrong shard!")
 	}
-	res.ShardId = s.id
+	res.ShardId = strconv.Itoa(id)
+	res.Message = msg.ShardInfoSuccess
 	res.KeyCount = &KeyCount
-	res.Replicas = s.Store.Replicas
+	res.CausalCtx = CausalCtx
+	res.Replicas = s.hash.GetReplicas(id)
 }
 
 func (s *State) shardsHandler(in types.Input, res *types.Response) {
-	res.Shards = s.getShardInfo(s.hash.Members())
+	res.Shards = s.getShardInfo(s.hash.Members(), in.CausalCtx)
 	res.Message = msg.ShardMembSuccess
+	res.CausalCtx = in.CausalCtx
 }
 
 func NewState(ctx context.Context, addr string, view types.View) *State {
@@ -124,7 +131,6 @@ func NewState(ctx context.Context, addr string, view types.View) *State {
 	s := &State{
 		store:   store.New(addr, hash.GetReplicas(hash.GetShardId(addr)), journal),
 		hash:    hash,
->>>>>>> master
 		address: addr,
 		cli: &http.Client{
 			Timeout: CLIENT_TIMEOUT,
@@ -137,17 +143,16 @@ func NewState(ctx context.Context, addr string, view types.View) *State {
 	return s
 }
 
-
 func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/gossip", s.receiveGossip).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
 	r.HandleFunc("/kv-store/shards", types.WrapHTTP(s.shardsHandler)).Methods(http.MethodGet)
-	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", s.forwardMessage).MatcherFunc(s.shouldForwardId)
+	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", s.forwardMessage).MatcherFunc(s.shouldForwardId).Methods(http.MethodGet)
 	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", types.WrapHTTP(s.idHandler)).Methods(http.MethodGet)
-	
-	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForward).Methods(http.MethodPut, http.MethodDelete)
+
+	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForwardKey).Methods(http.MethodPut, http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForwardRead).Methods(http.MethodGet)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
