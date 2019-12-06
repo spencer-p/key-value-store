@@ -24,7 +24,7 @@ const (
 	// don't get preempted by the http server dispatcher.
 	CLIENT_TIMEOUT = 5 * time.Minute
 
-	ADDRESS_KEY = "forwading_address"
+	ADDRESS_KEY = "forwarding_address"
 )
 
 func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
