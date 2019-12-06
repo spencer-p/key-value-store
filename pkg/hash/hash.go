@@ -37,7 +37,7 @@ func (m *Hash) Get(key string) (string, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	shardId, i, err := m.getShard(key)
+	shardId, i, err := m.getKeyShard(key)
 	if err != nil {
 		return "", err
 	}
@@ -52,7 +52,7 @@ func (m *Hash) GetAny(key string) (string, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	shardId, _, err := m.getShard(key)
+	shardId, _, err := m.getKeyShard(key)
 	if err != nil {
 		return "", err
 	}
@@ -61,21 +61,21 @@ func (m *Hash) GetAny(key string) (string, error) {
 	return m.elts[m.replFactor*shardId+replicaId], nil
 }
 
-// GetShard returns the shard that a key belongs to.
-func (m *Hash) GetShard(key string) (int, error) {
+// GetKeyShardId returns the shard that a key belongs to.
+func (m *Hash) GetKeyShardId(key string) (int, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	shardId, _, err := m.getShard(key)
+	shardId, _, err := m.getKeyShard(key)
 	if err != nil {
 		return -1, err
 	}
 	return shardId, nil
 }
 
-// getShard returns the shardId for a key and the hash of a key,
+// getKeyShard returns the shardId for a key and the hash of a key,
 // and potentially an error.
-func (m *Hash) getShard(key string) (int, int, error) {
+func (m *Hash) getKeyShard(key string) (int, int, error) {
 	n := len(m.elts)
 	if n == 0 {
 		return -1, -1, ErrNoElements
