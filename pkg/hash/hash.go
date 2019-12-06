@@ -74,6 +74,9 @@ func (m *Hash) GetReplicas(id int) []string {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
+	// Correct the id to support indexing starting at 1
+	id -= 1
+
 	res := make([]string, m.replFactor)
 	copy(res, m.elts[id*m.replFactor:(id+1)*m.replFactor])
 	return res
@@ -90,7 +93,7 @@ func (m *Hash) GetShardId(member string) int {
 			break
 		}
 	}
-	return i / m.replFactor
+	return i/m.replFactor + 1
 }
 
 // Members returns the list of nodes in this hash.
