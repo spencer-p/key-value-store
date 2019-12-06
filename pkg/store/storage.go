@@ -24,27 +24,27 @@ type Entry struct {
 
 // Store represents a volatile key value store.
 type Store struct {
-	addr    string
-	shard   []string
-	store   map[string]Entry
-	m       *sync.RWMutex
-	vc      clock.VectorClock
-	vcCond  *sync.Cond
-	journal chan<- Entry
+	addr     string
+	replicas []string
+	store    map[string]Entry
+	m        *sync.RWMutex
+	vc       clock.VectorClock
+	vcCond   *sync.Cond
+	journal  chan<- Entry
 }
 
 // New constructs an empty store that resides at the given address or unique ID.
 // The callback channel is issued all new modifications to the store (like a journal).
-func New(selfAddr string, shard []string, callback chan<- Entry) *Store {
+func New(selfAddr string, replicas []string, callback chan<- Entry) *Store {
 	var mtx sync.RWMutex
 	return &Store{
-		addr:    selfAddr,
-		shard:   shard,
-		store:   make(map[string]Entry),
-		m:       &mtx,
-		vc:      clock.VectorClock{},
-		vcCond:  sync.NewCond(&mtx),
-		journal: callback,
+		addr:     selfAddr,
+		replicas: replicas,
+		store:    make(map[string]Entry),
+		m:        &mtx,
+		vc:       clock.VectorClock{},
+		vcCond:   sync.NewCond(&mtx),
+		journal:  callback,
 	}
 }
 
@@ -191,18 +191,18 @@ func (s *Store) NumKeys(tcausal clock.VectorClock) (
 	return
 }
 
-// SetShard replaces the current shard member list this store thinks it is on.
-func (s *Store) SetShard(members []string) {
+// SetReplicas replaces the current replicas list this store thinks it is on.
+func (s *Store) SetReplicas(nodes []string) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	s.shard = members
+	s.replicas = nodes
 }
 
 // BumpClockForNode informs the store that another node has processed an event of ours.
-func (s *Store) BumpClockForNode(member string) {
+func (s *Store) BumpClockForNode(node string) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	s.vc.Increment(member)
+	s.vc.Increment(node)
 	s.vcCond.Broadcast()
 }
 
@@ -216,10 +216,10 @@ func (s *Store) String() string {
 // clock is not causally from the future.  the write mutex must be held on the
 // store.
 func (s *Store) waitUntilCurrent(incoming clock.VectorClock) error {
-	incoming = incoming.Subset(s.shard)
+	incoming = incoming.Subset(s.replicas)
 	for {
 		// As long as this clock is not from the future, we can apply it.
-		if cmp := incoming.Compare(s.vc.Subset(s.shard)); cmp != clock.Greater {
+		if cmp := incoming.Compare(s.vc.Subset(s.replicas)); cmp != clock.Greater {
 			return nil
 		}
 		s.vcCond.Wait()
@@ -227,9 +227,9 @@ func (s *Store) waitUntilCurrent(incoming clock.VectorClock) error {
 }
 
 func (s *Store) waitForGossip(incoming clock.VectorClock) error {
-	incoming = incoming.Subset(s.shard)
+	incoming = incoming.Subset(s.replicas)
 	for {
-		if canApply, _ := incoming.OneUpExcept(s.addr, s.vc.Subset(s.shard)); canApply {
+		if canApply, _ := incoming.OneUpExcept(s.addr, s.vc.Subset(s.replicas)); canApply {
 			// One atomic update from another node.
 			return nil
 		}

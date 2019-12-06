@@ -67,15 +67,14 @@ func (s *State) sendGossip(ctx context.Context, e store.Entry, node string) {
 			log.Println("Could not create request to send entry:", err)
 			break
 		}
-		if resp, err := s.cli.Do(request); (err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)) ||
-			resp.StatusCode != http.StatusOK {
-			log.Printf("Failed to gossip %v: %v\n", e, err)
-			log.Println("Retrying after timeout")
-		} else {
+		if resp, err := s.cli.Do(request); gossipSucceeded(resp, err) {
 			// Successfully gossipped.
 			s.store.BumpClockForNode(node)
 			return
 		}
+
+		log.Printf("Failed to gossip %v: %v\n", e, err)
+		log.Println("Retrying after timeout")
 
 		// Perform exponential backoff with a max of one second
 		time.Sleep(tout)
@@ -84,4 +83,18 @@ func (s *State) sendGossip(ctx context.Context, e store.Entry, node string) {
 			tout = RETRY_TIMEOUT_MAX
 		}
 	}
+}
+
+func gossipSucceeded(resp *http.Response, err error) bool {
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		// Returned an error that does not have to do with the context being cancelled.
+		return false
+	} else if resp.StatusCode != http.StatusOK {
+		// The target rejected it for some reason
+		return false
+	}
+	// There may have been a context error, which means the gossip did not succeed.
+	// However, we should stop looping forever if the context is closed.
+	// In the common case, this was no error and a 200 from the other node.
+	return true
 }
