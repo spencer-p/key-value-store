@@ -19,4 +19,5 @@ const (
 	KeyTooLong    = "Key is too long"
 	ValueMissing  = "Value is missing"
 	BadForwarding = "Bad forwarding address"
+	Unavailable   = "Unable to satisfy request"
 )
