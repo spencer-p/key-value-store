@@ -48,7 +48,7 @@ func TestShardMembers(t *testing.T) {
 		ReplFactor: 3,
 	})
 
-	if diff := cmp.Diff(m.GetReplicas(0), []string{"a", "b", "c"}); diff != "" {
+	if diff := cmp.Diff(m.GetReplicas(1), []string{"a", "b", "c"}); diff != "" {
 		t.Errorf("did not get correct shard (-got,+want): %s", diff)
 	}
 }

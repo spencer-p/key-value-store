@@ -37,27 +37,48 @@ func (m *Hash) Get(key string) (string, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	n := len(m.elts)
-	if n == 0 {
-		return "", ErrNoElements
+	shardId, i, err := m.getShard(key)
+	if err != nil {
+		return "", err
 	}
 
-	m.fnv.Reset()
-	fmt.Fprintf(m.fnv, key)
-	i := int(m.fnv.Sum32())
-	shardCount := n / m.replFactor
-	shardId := i % shardCount
 	replicaId := i % m.replFactor
 	return m.elts[m.replFactor*shardId+replicaId], nil
 }
 
+// GetAny returns any node that should be able to service a given key,
+// even if that node is not the primary for a given key.
 func (m *Hash) GetAny(key string) (string, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
+	shardId, _, err := m.getShard(key)
+	if err != nil {
+		return "", err
+	}
+
+	replicaId := rand.Intn(m.replFactor)
+	return m.elts[m.replFactor*shardId+replicaId], nil
+}
+
+// GetShard returns the shard that a key belongs to.
+func (m *Hash) GetShard(key string) (int, error) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	shardId, _, err := m.getShard(key)
+	if err != nil {
+		return -1, err
+	}
+	return shardId, nil
+}
+
+// getShard returns the shardId for a key and the hash of a key,
+// and potentially an error.
+func (m *Hash) getShard(key string) (int, int, error) {
 	n := len(m.elts)
 	if n == 0 {
-		return "", ErrNoElements
+		return -1, -1, ErrNoElements
 	}
 
 	m.fnv.Reset()
@@ -65,8 +86,7 @@ func (m *Hash) GetAny(key string) (string, error) {
 	i := int(m.fnv.Sum32())
 	shardCount := n / m.replFactor
 	shardId := i % shardCount
-	replicaId := rand.Intn(m.replFactor)
-	return m.elts[m.replFactor*shardId+replicaId], nil
+	return shardId, i, nil
 }
 
 // GetReplicas returns the set of members in the given shard.
