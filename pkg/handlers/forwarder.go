@@ -35,10 +35,15 @@ func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 
 func (s *State) shouldForwardRead(r *http.Request, rm *mux.RouteMatch) bool {
 	key := path.Base(r.URL.Path)
-	if s.hash.GetShard(key) == s.hash.GetShardId(s.address) {
+
+	if keyBelongsOnShard, err := s.hash.GetKeyShardId(key); err != nil {
+		log.Println("The state of the hash is broken:", err)
+		return true // not our problem anymore :^)
+	} else if keyBelongsOnShard == s.hash.GetShardId(s.address) {
 		// If the key belongs to our shard, we should not forward it.
 		return false
 	}
+
 	nodeAddr, err := s.hash.GetAny(key)
 	return s.shouldForwardToNode(r, key, nodeAddr, err)
 }
