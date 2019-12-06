@@ -160,7 +160,6 @@ func (s *State) getShardInfo(view []string) []types.Shard {
 			// Set the address and an invalid value before we found out the
 			// actual value
 
-			shard.Address = addr
 			shard.KeyCount = -1
 
 			log.Println(addr)

@@ -94,7 +94,7 @@ func (s *State) idHandler(in types.Input, res *types.Response) {
 
 func (s *State) shardsHandler(in types.Input, res *types.Response) {
 	res.Shards = s.getShardInfo(s.hash.Members())
-
+	res.Message = msg.ShardMembSuccess
 }
 
 func InitNode(r *mux.Router, addr string, repFact int, replicas []string, view []string, shardId string) *State {
