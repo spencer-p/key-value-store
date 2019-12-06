@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/handlers"
+	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 
 	"github.com/gorilla/mux"
@@ -19,14 +20,15 @@ import (
 )
 
 const (
-	TIMEOUT = 5 * time.Second
+	TIMEOUT = 10 * time.Minute
 )
 
 type Config struct {
 	// Config VIEW and ADDRESS
-	Port    string `envconfig:"PORT" required:"true"`
-	View    string `envconfig:"VIEW" required:"true"`
-	Address string `envconfig:"ADDRESS" required:"true"`
+	Port       string `envconfig:"PORT" required:"true"`
+	View       string `envconfig:"VIEW" required:"true"`
+	Address    string `envconfig:"ADDRESS" required:"true"`
+	ReplFactor int    `envconfig:"REPL_FACTOR" required:"true"`
 }
 
 func main() {
@@ -34,11 +36,16 @@ func main() {
 	envconfig.MustProcess("", &env)
 	log.Printf("Configured: %+v\n", env)
 
-	// Create a mux and route handlers
+	// Create a cancelable context so we can kill processes
+	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create a mux and route handlers
 	r := mux.NewRouter()
 	r.Use(util.WithLog)
-	handlers.InitNode(r, env.Address, strings.Split(env.View, ","))
+	handlers.NewState(ctx, env.Address, types.View{
+		Members:    strings.Split(env.View, ","),
+		ReplFactor: env.ReplFactor,
+	}).Route(r)
 
 	srv := &http.Server{
 		Handler:      r,
@@ -62,5 +69,6 @@ func main() {
 
 	log.Println("Shutdown signal received, exiting...")
 
+	cancel()
 	srv.Shutdown(context.Background())
 }

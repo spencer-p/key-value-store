@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"net/http"
 
@@ -15,7 +16,7 @@ import (
 
 type State struct {
 	store   *store.Store
-	hash    hash.Interface
+	hash    *hash.Hash
 	address string
 	cli     *http.Client
 }
@@ -27,10 +28,15 @@ func (s *State) deleteHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	_, ok := s.store.Read(in.Key)
-	res.Exists = &ok
+	err, ok, vc := s.store.Delete(in.CausalCtx, in.Key)
+	if err != nil {
+		res.Status = http.StatusServiceUnavailable
+		res.Error = msg.Unavailable
+		return
+	}
 
-	s.store.Delete(in.Key)
+	res.Exists = &ok
+	res.CausalCtx = vc
 
 	if !ok {
 		res.Status = http.StatusNotFound
@@ -41,12 +47,17 @@ func (s *State) deleteHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) getHandler(in types.Input, res *types.Response) {
-	value, exists := s.store.Read(in.Key)
-
-	res.Exists = &exists
-	if exists {
+	err, e, ok, vc := s.store.Read(in.CausalCtx, in.Key)
+	if err != nil {
+		res.Status = http.StatusServiceUnavailable
+		res.Error = msg.Unavailable
+		return
+	}
+	res.CausalCtx = vc
+	res.Exists = &ok
+	if ok {
 		res.Message = msg.GetSuccess
-		res.Value = value
+		res.Value = e.Value
 	} else {
 		res.Error = msg.KeyDNE
 		res.Status = http.StatusNotFound
@@ -54,10 +65,16 @@ func (s *State) getHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) countHandler(in types.Input, res *types.Response) {
-	KeyCount := s.store.NumKeys()
+	err, count, vc := s.store.NumKeys(in.CausalCtx)
+	if err != nil {
+		res.Status = http.StatusServiceUnavailable
+		res.Error = msg.Unavailable
+		return
+	}
 
 	res.Message = msg.NumKeySuccess
-	res.KeyCount = &KeyCount
+	res.KeyCount = &count
+	res.CausalCtx = vc
 }
 
 func (s *State) putHandler(in types.Input, res *types.Response) {
@@ -67,8 +84,14 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 		return
 	}
 
-	replaced := s.store.Set(in.Key, in.Value)
+	err, replaced, vc := s.store.Write(in.CausalCtx, in.Key, in.Value)
+	if err != nil {
+		res.Status = http.StatusServiceUnavailable
+		res.Error = msg.Unavailable
+		return
+	}
 
+	res.CausalCtx = vc
 	res.Replaced = &replaced
 	res.Message = msg.PutSuccess
 	if replaced {
@@ -78,32 +101,31 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
-func InitNode(r *mux.Router, addr string, view []string) {
-	s := NewState(addr, view)
-	s.Route(r)
-}
-
-func NewState(addr string, view []string) *State {
+func NewState(ctx context.Context, addr string, view types.View) *State {
+	journal := make(chan store.Entry, 10)
+	hash := hash.New(view)
 	s := &State{
-		store:   store.New(),
-		hash:    hash.NewModulo(),
+		store:   store.New(addr, hash.GetReplicas(hash.GetShardId(addr)), journal),
+		hash:    hash,
 		address: addr,
 		cli: &http.Client{
 			Timeout: CLIENT_TIMEOUT,
 		},
 	}
 
-	log.Println("Adding these node address to members of hash", view)
-	s.hash.Set(view)
+	log.Println("Starting gossip dispatcher")
+	go s.dispatchGossip(ctx, journal)
 
 	return s
 }
 
 func (s *State) Route(r *mux.Router) {
+	r.HandleFunc("/kv-store/gossip", s.receiveGossip).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
-	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForward)
+	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForward).Methods(http.MethodPut, http.MethodDelete)
+	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForwardRead).Methods(http.MethodGet)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)

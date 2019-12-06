@@ -7,8 +7,14 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 )
+
+type View struct {
+	Members    []string `json:"view"`
+	ReplFactor int      `json:"repl-factor"`
+}
 
 type Response struct {
 	// The status code is not marshalled to JSON. The wrapper function uses this
@@ -28,6 +34,9 @@ type Response struct {
 
 	// Potential forwarding metadata
 	Address string `json:"address,omitempty"`
+
+	// Context for causal consistency
+	CausalCtx clock.VectorClock `json:"causal-context"`
 }
 
 type Shard struct {
@@ -40,8 +49,11 @@ type Input struct {
 	Entry `json:",inline"`
 
 	// A View and Batch is only used for view change requests.
-	View  string  `json:"view"`
+	View  View    `json:",inline"`
 	Batch []Entry `json:"diff"`
+
+	// Context the request thinks is current
+	CausalCtx clock.VectorClock `json:"causal-context"`
 
 	// Marked true only for internal communication.
 	Internal bool `json:"internal,omitempty"`
@@ -70,6 +82,11 @@ func WrapHTTP(next func(Input, *Response)) http.HandlerFunc {
 			result.Status = http.StatusBadRequest
 			result.Serve(w, r)
 			return
+		}
+
+		// default the causal context
+		if in.CausalCtx == nil {
+			in.CausalCtx = clock.VectorClock{}
 		}
 
 		next(in, result)

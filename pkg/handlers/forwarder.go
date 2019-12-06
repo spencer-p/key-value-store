@@ -22,26 +22,41 @@ import (
 const (
 	// This has to be shorter than the http server read/write timeout so that we
 	// don't get preempted by the http server dispatcher.
-	CLIENT_TIMEOUT = 2 * time.Second
+	CLIENT_TIMEOUT = 5 * time.Minute
 
-	ADDRESS_KEY = "forwading_address"
+	ADDRESS_KEY = "forwarding_address"
 )
 
 func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
 	key := path.Base(r.URL.Path)
 	nodeAddr, err := s.hash.Get(key)
+	return s.shouldForwardToNode(r, key, nodeAddr, err)
+}
+
+func (s *State) shouldForwardRead(r *http.Request, rm *mux.RouteMatch) bool {
+	key := path.Base(r.URL.Path)
+
+	if keyBelongsOnShard, err := s.hash.GetKeyShardId(key); err != nil {
+		log.Println("The state of the hash is broken:", err)
+		return true // not our problem anymore :^)
+	} else if keyBelongsOnShard == s.hash.GetShardId(s.address) {
+		// If the key belongs to our shard, we should not forward it.
+		return false
+	}
+
+	nodeAddr, err := s.hash.GetAny(key)
+	return s.shouldForwardToNode(r, key, nodeAddr, err)
+}
+
+func (s *State) shouldForwardToNode(r *http.Request, key, nodeAddr string, err error) bool {
 	if err != nil {
 		log.Printf("Failed to get address for key %q: %v\n", key, err)
 		log.Println("This node will handle the request")
 		return false
 	}
-
 	if nodeAddr == s.address {
-		log.Printf("Key %q is serviced by this node\n", key)
 		return false
 	} else {
-		log.Printf("Key %q is serviced by %q\n", key, nodeAddr)
-
 		// Store the target node address in the http request context.
 		ctx := context.WithValue(r.Context(), ADDRESS_KEY, nodeAddr)
 		*r = *(r.WithContext(ctx))
@@ -68,6 +83,8 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 		result.Error = msg.BadForwarding
 		return
 	}
+
+	log.Printf("Forwarding req w/ %q to %q\n", mux.Vars(r)["key"], nodeAddr)
 
 	target, err := url.Parse(util.CorrectURL(nodeAddr))
 	if err != nil {

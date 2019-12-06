@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
@@ -21,22 +21,21 @@ const (
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
-	view := strings.Split(in.View, ",")
-	if len(view) == 0 {
+	if len(in.View.Members) == 0 || in.View.ReplFactor == 0 {
 		res.Status = http.StatusBadRequest
 		res.Error = msg.FailedToParse
 		return
 	}
 
-	log.Printf("Received view change with addrs %v\n", view)
+	log.Printf("Received view change %#v\n", in.View)
 
-	viewIsNew := s.hash.TestAndSet(view)
+	viewIsNew := s.hash.TestAndSet(in.View)
 	if viewIsNew {
 		log.Println("This view is new information")
 		// We just set a new view. We have keys that need to move to other
 		// nodes.
 		batches := s.getBatches()
-		offloaded, err := s.dispatchBatches(view, batches)
+		offloaded, err := s.dispatchBatches(in.View, batches)
 		if err != nil {
 			log.Println("Failed to offload some keys:", err)
 		}
@@ -58,15 +57,16 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	// response to the oracle
 	log.Println("Cluster's view change is committed to all nodes")
 	res.Message = msg.ViewChangeSuccess
-	res.Shards = s.getKeyCounts(view)
+	res.Shards = s.getKeyCounts(in.View.Members) // TODO use the hash object
 }
 
 // getBatches retrieves all batches of keys that should be on other nodes and
 // returns them.
 func (s *State) getBatches() map[string][]types.Entry {
 	batches := make(map[string][]types.Entry)
-	s.store.For(func(key, value string) store.IterAction {
+	s.store.For(func(key string, e store.Entry) store.IterAction {
 		target, err := s.hash.Get(key)
+		value := e.Value
 		if err != nil {
 			log.Printf("Invalid key %q=%q: %v. Dropping.\n", key, value, err)
 		}
@@ -85,27 +85,28 @@ func (s *State) getBatches() map[string][]types.Entry {
 // deleteEntries removes the given batches from our own state.
 func (s *State) deleteEntries(entries []types.Entry) {
 	log.Println("Deleting", len(entries), "offloaded keys")
-	for i := range entries {
-		s.store.Delete(entries[i].Key)
+	for _ = range entries {
+		// TODO Force these deletes somehow (or don't?)
+		//s.store.Delete(clock.VectorClock{}, entries[i].Key)
 	}
 }
 
 // dispatchBatches forwards a view change to all other nodes in the view.
 // A list of batches that were successfully dispatched is returned with an error.
-func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry) ([]types.Entry, error) {
+func (s *State) dispatchBatches(view types.View, batches map[string][]types.Entry) ([]types.Entry, error) {
 	var wg sync.WaitGroup
 	var finalerr error
 	deletech := make(chan []types.Entry)
 	donech := make(chan struct{})
 
 	// Spin up a goroutine to send each batch to each node
-	for i := range view {
+	for i := range view.Members {
 		wg.Add(1)
 		go func(addr string, batch []types.Entry) {
 			defer wg.Done()
 			log.Printf("Sending view/batch with %d keys to %q\n", len(batch), addr)
 			err := s.sendBatch(addr, types.Input{
-				View:  strings.Join(view, ","),
+				View:  view,
 				Batch: batch,
 			})
 			if err != nil {
@@ -114,7 +115,7 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 				return
 			}
 			deletech <- batch
-		}(view[i], batches[view[i]])
+		}(view.Members[i], batches[view.Members[i]])
 	}
 
 	// Wait for all the goroutines to terminate.
@@ -143,8 +144,9 @@ func (s *State) dispatchBatches(view []string, batches map[string][]types.Entry)
 }
 
 func (s *State) applyBatch(batch []types.Entry) {
-	for _, e := range batch {
-		s.store.Set(e.Key, e.Value)
+	for _, _ = range batch {
+		// TODO these need to be stored better
+		//s.store.Set(e.Key, e.Value)
 	}
 }
 
@@ -199,7 +201,8 @@ func (s *State) getKeyCounts(view []string) []types.Shard {
 
 			// Don't make a request if it's just ourselves
 			if addr == s.address {
-				shard.KeyCount = s.store.NumKeys()
+				// TODO do something smarter
+				_, shard.KeyCount, _ = s.store.NumKeys(clock.VectorClock{})
 				return
 			}
 
