@@ -22,13 +22,6 @@ type Entry struct {
 	Clock   clock.VectorClock `json:"clock"`
 }
 
-// Store represents a volatile key value store.
-
-type KeyInfo struct {
-	Value string
-	Vec   *clock.VectorClock
-}
-
 type Store struct {
 	addr     string
 	replicas []string

@@ -3,7 +3,6 @@ package util
 import (
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -44,27 +43,4 @@ func CorrectURL(addr string) string {
 		addr = "http://" + addr
 	}
 	return addr
-}
-
-func GetReplicasAddr(view []string, address string, repFact int) ([]string, string) {
-	var replicas []string
-	var shardId int
-	seen := false
-	for index, nodeAddr := range view {
-		if len(replicas) == repFact {
-			if seen {
-				break
-			} else {
-				replicas = nil
-			}
-		}
-		if nodeAddr == address {
-			seen = true
-		}
-		replicas = append(replicas, nodeAddr)
-		shardId = index / repFact
-	}
-
-	log.Println("Shard id", shardId)
-	return replicas, strconv.Itoa(shardId)
 }
