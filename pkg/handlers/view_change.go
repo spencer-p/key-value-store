@@ -17,8 +17,12 @@ import (
 )
 
 const (
-	VIEWCHANGE_ENDPOINT = "/kv-store/view-change"
-	KEYCOUNT_ENDPOINT   = "/kv-store/key-count"
+	PRIMARY_COLLECT_ENDPOINT   = "/kv-store/primary-collect"
+	SECONDARY_COLLECT_ENDPOINT = "/kv-store/secondary-collect"
+	PRIMARY_REPLACE_ENDPOINT   = "/kv-store/primary-replace"
+	SECONDARY_REPLACE_ENDPOINT = "/kv-store/secondary-replace"
+	VIEWCHANGE_ENDPOINT        = "/kv-store/view-change"
+	KEYCOUNT_ENDPOINT          = "/kv-store/key-count"
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
@@ -42,7 +46,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 				log.Println("Attempting to fetch shard", shardId, "state from", primary)
 				httpResp, err := s.sendHttp(
 					http.MethodGet,
-					primary, "/view-change/primary-collect",
+					primary, PRIMARY_COLLECT_ENDPOINT,
 					&in, &response)
 				if err != nil {
 					log.Printf("Failed to send collect from primary %q for shard %d: %v\n", primary, shardId, err)
@@ -90,7 +94,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 			var response types.Response
 			httpResp, err := s.sendHttp(
 				http.MethodPut,
-				primary, "/view-change/primary-replace",
+				primary, PRIMARY_REPLACE_ENDPOINT,
 				&types.Input{View: in.View, StorageState: state}, &response)
 			if err != nil {
 				log.Printf("Failed to send state to primary %q: %v\n", primary, err)
