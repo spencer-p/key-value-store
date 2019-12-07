@@ -50,24 +50,24 @@ func (s *State) primaryReplace(in types.Input, res *types.Response) {
 		}
 
 		wg.Add(1)
-		go func() {
+		go func(addr string) {
 			defer wg.Done()
 			var response types.Response
 			resp, err := s.sendHttp(http.MethodPut,
-				replicaAddr,
+				addr,
 				SECONDARYREPLACE_ENDPOINT,
 				in,
 				&response)
 			if err != nil {
-				log.Printf("Failed to send http to %q: %v\n", replicaAddr, err)
+				log.Printf("Failed to send http to %q: %v\n", addr, err)
 				return
 			}
 
 			if resp.StatusCode != http.StatusOK {
-				log.Printf("Replica at %q failed to replace storage: %d", replicaAddr, resp.StatusCode)
+				log.Printf("Replica at %q failed to replace storage: %d", addr, resp.StatusCode)
 				return
 			}
-		}()
+		}(replicaAddr)
 	}
 
 	wg.Wait()
