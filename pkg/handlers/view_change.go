@@ -7,15 +7,19 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sync"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 )
 
 const (
-	VIEWCHANGE_ENDPOINT = "/kv-store/view-change"
-	KEYCOUNT_ENDPOINT   = "/kv-store/key-count"
+	PRIMARY_COLLECT_ENDPOINT   = "/kv-store/primary-collect"
+	SECONDARY_COLLECT_ENDPOINT = "/kv-store/secondary-collect"
+	VIEWCHANGE_ENDPOINT        = "/kv-store/view-change"
+	KEYCOUNT_ENDPOINT          = "/kv-store/key-count"
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
@@ -30,9 +34,69 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	// TODO coordinator view change
 }
 
+// TODO collect from secondaries
+// return our func (s *State) primaryCollect(in types.Input, res *types.Response) types.Response {
 func (s *State) primaryCollect(in types.Input, res *types.Response) {
-	// TODO collect from secondaries
-	// return our state
+	replicas := s.store.GetReplicas()
+	clockCh := make(chan clock.VectorClock)
+	var wg sync.WaitGroup
+
+	log.Println("Requesting key counts from the other shards")
+	for i := range replicas {
+		go func(addr string, replicaNum int) {
+			defer wg.Done()
+			// Set the address and an invalid value before we found out the
+			// actual value
+
+			// Don't make a request if it's just ourselves
+			if addr == s.address {
+				context := s.store.Clock()
+				clockCh <- context
+				return
+			}
+
+			var response types.Response
+			resp, err := s.sendHttp(http.MethodGet,
+				addr,
+				SECONDARY_COLLECT_ENDPOINT,
+				in.CausalCtx,
+				&response)
+			if err != nil {
+				clockCh <- nil
+				log.Printf("Failed to send http to %q: %v\n", addr, err)
+				return
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				clockCh <- nil
+				log.Printf("Shard at %q returned %d for key count\n", addr, resp.StatusCode)
+				return
+			}
+
+			if response.KeyCount == nil {
+				clockCh <- nil
+				log.Printf("Response from %q does not have a key count\n", addr)
+				return
+			}
+
+			clockCh <- response.CausalCtx
+		}(replicas[i], i+1)
+	}
+	waiting := s.store.Clock()
+	for _ = range replicas {
+		c := <-clockCh
+		waiting.Max(c)
+	}
+
+	err := s.store.WaitUntilCurrent(waiting)
+	if err != nil {
+		log.Printf("Wait until current error", err)
+		res.Status = http.StatusServiceUnavailable
+		return
+	}
+
+	store := s.store.AllEntries()
+	res.StorageState = store
 }
 
 func (s *State) primaryReplace(in types.Input, res *types.Response) {
