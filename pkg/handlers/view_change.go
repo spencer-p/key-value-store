@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sync"
 
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -51,8 +52,11 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 					continue
 				}
 
-				// The primary we tried returned a storage object. hooray!
+				// The primary we tried returned a storage object.
+				// Pass on the state and stop querying this shard.
+				log.Println("Received state for shard", shardId)
 				storageCh <- response.StorageState
+				return
 			}
 
 			log.Println("All replicas in shard", shardId, "were unreachable. Ignoring shard.")
@@ -70,14 +74,19 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 			if err != nil {
 				log.Printf("Failed to get primary for key %q: %v", state[si].Key, err)
 				log.Println("Ignoring key")
+				continue
 			}
 			statesByPrimary[primary] = append(statesByPrimary[primary], state[si])
 		}
 	}
 
 	// Send all the new states to primary replace
+	var wg sync.WaitGroup
 	for primary := range statesByPrimary {
+		wg.Add(1)
 		go func(primary string, state []store.Entry) {
+			defer wg.Done()
+			log.Println("Dispatching a state to new primary", primary)
 			var response types.Response
 			httpResp, err := s.sendHttp(
 				http.MethodPut,
@@ -94,6 +103,9 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 			log.Println("Primary at", primary, "accepted new state")
 		}(primary, statesByPrimary[primary])
 	}
+	wg.Wait()
+
+	log.Println("View change complete")
 
 	// Calculate all the shard info
 	nshards = len(in.View.Members) / in.View.ReplFactor
