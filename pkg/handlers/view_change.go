@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sync"
 
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
@@ -14,8 +15,9 @@ import (
 )
 
 const (
-	VIEWCHANGE_ENDPOINT = "/kv-store/view-change"
-	KEYCOUNT_ENDPOINT   = "/kv-store/key-count"
+	VIEWCHANGE_ENDPOINT       = "/kv-store/view-change"
+	KEYCOUNT_ENDPOINT         = "/kv-store/key-count"
+	SECONDARYREPLACE_ENDPOINT = "/kv-store/view-change/secondary-replace"
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
@@ -36,8 +38,40 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 }
 
 func (s *State) primaryReplace(in types.Input, res *types.Response) {
+	s.hash.TestAndSet(in.View)
 	s.store.ReplaceEntries(in.StorageState)
-	// TODO dispatch the same input to all of the secondaries
+	s.store.SetReplicas(in.View.Members)
+	var wg sync.WaitGroup
+
+	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
+	for _, replicaAddr := range replicas {
+		if replicaAddr == s.address {
+			continue
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var response types.Response
+			resp, err := s.sendHttp(http.MethodPut,
+				replicaAddr,
+				SECONDARYREPLACE_ENDPOINT,
+				in,
+				&response)
+			if err != nil {
+				log.Printf("Failed to send http to %q: %v\n", replicaAddr, err)
+				return
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Replica at %q failed to replace storage: %d", replicaAddr, resp.StatusCode)
+				return
+			}
+		}()
+	}
+
+	wg.Wait()
+	return
 }
 
 func (s *State) secondaryCollect(in types.Input, res *types.Response) {

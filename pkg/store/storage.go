@@ -224,6 +224,11 @@ func (s *Store) ReplaceEntries(entries []Entry) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	// TODO Set the map to nothing, assign all the entries to their key
+	replace := make(map[string]Entry)
+	for _, entry := range entries {
+		replace[entry.Key] = entry
+	}
+	s.store = replace
 }
 
 // Clock returns the current vector clock.
