@@ -131,13 +131,14 @@ func (m *Hash) Members() []string {
 	return m.elts
 }
 
+// Returns view address and replication factor
 func (m *Hash) GetView() types.View {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
 	var view types.View
-	view.Members = m.Members()
-	view.ReplFactor = m.GetReplicationFactor()
+	view.Members = m.elts
+	view.ReplFactor = m.replFactor
 	return view
 }
 

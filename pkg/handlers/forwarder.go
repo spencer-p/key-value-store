@@ -42,16 +42,13 @@ func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
 
 		id, err := strconv.Atoi(id)
 		if err != nil {
-			log.Printf("Failed to strconv id %q\n", id)
+			log.Printf("Failed to strconv Id %q\n", id)
 			return false
 		}
 
-		viewInfo := s.hash.GetView()
-		view := viewInfo.Members
-		replFactor := viewInfo.ReplFactor
-		shardIndex := (len(view) / replFactor) * (id - 1)
-		log.Printf("Id %q is serviced by %q\n", id, view[shardIndex])
-		ctx := context.WithValue(r.Context(), ADDRESS_KEY, view[shardIndex])
+		targetNode := s.hash.GetReplicas(id)[0]
+		log.Printf("Id %q is serviced by %q\n", id, targetNode)
+		ctx := context.WithValue(r.Context(), ADDRESS_KEY, targetNode)
 		*r = *(r.WithContext(ctx))
 		return true
 	}
@@ -159,46 +156,57 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (s *State) getShardInfo(view []string, CausalCtx clock.VectorClock) []types.Shard {
-	replFactor := s.hash.GetReplicationFactor()
-	shardTotal := len(view) / replFactor
+func (s *State) getShardInfo(view types.View, CausalCtx clock.VectorClock) []types.Shard {
+	replFactor := view.ReplFactor
+	shardTotal := len(view.Members) / replFactor
 	shards := make([]types.Shard, shardTotal)
 	var wg sync.WaitGroup
 
 	log.Println("Requesting key counts from the other shards")
-	shardIndex := shardTotal
 	for i := range shards {
 		wg.Add(1)
-		go func(addr string, shard *types.Shard) {
+		go func(addr string, shard *types.Shard, shardID int) {
 			defer wg.Done()
 
-			//TODO Figure out why i starts out as 1
-			log.Println("i is", i)
 			// Set the address and an invalid value before we found out the
 			// actual value
 
 			shard.KeyCount = -1
-
-			log.Println(addr)
 			// Don't make a request if it's just ourselves
-			shardIndex = s.hash.GetShardId(addr) //TODO Replace this with get ID from address method
 			if addr == s.address {
-				shard.Id = strconv.Itoa(s.hash.GetShardId(addr))
-				err, KeyCount, CausalCtx := s.store.NumKeys(CausalCtx)
+				shard.Id = &shardID
+				err, KeyCount, _ := s.store.NumKeys(CausalCtx)
 				if err != nil {
 					log.Printf("Failed to get NumKeys for addr %q: %v", addr, err)
 				}
-				_ = CausalCtx
 				shard.KeyCount = KeyCount
 				return
 			}
 
+			Context, err := json.Marshal(CausalCtx)
+			if err != nil {
+				log.Println("Failed to Causal Ctx", err)
+			}
+
+			target, err := url.Parse(util.CorrectURL(addr))
+			if err != nil {
+				log.Println("Bad forwarding address")
+				return
+			}
+
+			target.Path = path.Join(target.Path, SHARD_ENDPOINT+"/"+strconv.Itoa(shardID))
 			// Dispatch a get request to the other node
-			resp, err := s.cli.Get(util.CorrectURL(addr) + SHARD_ENDPOINT + "/" + strconv.Itoa(shardIndex))
+			request, err := http.NewRequest(http.MethodGet,
+				target.String(),
+				bytes.NewBuffer(Context))
 			if err != nil {
 				log.Printf("Failed to send a req to %q: %v\n", addr, err)
 				return
 			}
+
+			request.Header.Set("Content-Type", "application/json")
+
+			resp, err := s.cli.Do(request)
 			if resp.StatusCode != http.StatusOK {
 				log.Printf("Shard at %q returned %d for key count\n", addr, resp.StatusCode)
 				return
@@ -219,7 +227,7 @@ func (s *State) getShardInfo(view []string, CausalCtx clock.VectorClock) []types
 			// We actually got a response!
 			shard.Id = response.ShardId
 			shard.KeyCount = *response.KeyCount
-		}(view[i*replFactor], &shards[i])
+		}(view.Members[i*replFactor], &shards[i], i+1)
 	}
 
 	wg.Wait()

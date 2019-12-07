@@ -31,7 +31,7 @@ type Response struct {
 	// Info about the state of shards
 	Shards   []Shard  `json:"shards,omitempty"`
 	KeyCount *int     `json:"key-count,omitempty"`
-	ShardId  string   `json:"shard-id,omitempty"`
+	ShardId  *int     `json:"shard-id,omitempty"`
 	Replicas []string `json:"replicas,omitempty"`
 	// Potential forwarding metadata
 	Address string `json:"address,omitempty"`
@@ -41,7 +41,7 @@ type Response struct {
 }
 
 type Shard struct {
-	Id       string `json:"shard-id,omitempty"`
+	Id       *int   `json:"shard-id,omitempty"`
 	Address  string `json:"address,omitempty"`
 	KeyCount int    `json:"key-count"`
 }
@@ -63,9 +63,8 @@ type Input struct {
 
 // An Entry is a key value pair.
 type Entry struct {
-	Key    string             `json:"key"`
-	Value  string             `json:"value"`
-	Vector *clock.VectorClock `json:"Vec,omitempty"`
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 // WrapHTTP wraps an method that processes Inputs and writes a Response as an http

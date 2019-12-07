@@ -5,7 +5,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -60,7 +59,6 @@ func (s *State) getHandler(in types.Input, res *types.Response) {
 		res.Message = msg.GetSuccess
 		res.Value = e.Value
 	} else {
-		log.Println("does not exist")
 		res.Error = msg.KeyDNE
 		res.Status = http.StatusNotFound
 	}
@@ -109,10 +107,7 @@ func (s *State) idHandler(in types.Input, res *types.Response) {
 		log.Println("Error on id handler", err)
 	}
 	id := s.hash.GetShardId(s.address)
-	if strconv.Itoa(id) != in.Key {
-		log.Println("Wrong shard!")
-	}
-	res.ShardId = strconv.Itoa(id)
+	res.ShardId = &id
 	res.Message = msg.ShardInfoSuccess
 	res.KeyCount = &KeyCount
 	res.CausalCtx = CausalCtx
@@ -120,7 +115,8 @@ func (s *State) idHandler(in types.Input, res *types.Response) {
 }
 
 func (s *State) shardsHandler(in types.Input, res *types.Response) {
-	res.Shards = s.getShardInfo(s.hash.Members(), in.CausalCtx)
+	view := s.hash.GetView()
+	res.Shards = s.getShardInfo(view, in.CausalCtx)
 	res.Message = msg.ShardMembSuccess
 	res.CausalCtx = in.CausalCtx
 }
