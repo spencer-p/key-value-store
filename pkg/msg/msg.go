@@ -10,6 +10,8 @@ const (
 	DeleteSuccess            = "Deleted successfully"
 	ViewChangeSuccess        = "View change successful"
 	PartialViewChangeSuccess = "Partial view change successful"
+	ShardInfoSuccess         = "Shard information retrieved successfully"
+	ShardMembSuccess         = "Shard membership retrieved successfully"
 
 	FailedToParse = "Failed to parse request body"
 	KeyMissing    = "Key is missing"

@@ -10,8 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
+	"sync"
 	"time"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
@@ -24,10 +27,34 @@ const (
 	// don't get preempted by the http server dispatcher.
 	CLIENT_TIMEOUT = 5 * time.Minute
 
-	ADDRESS_KEY = "forwarding_address"
+	SHARD_ENDPOINT = "/kv-store/shards"
+	ADDRESS_KEY    = "forwarding_address"
 )
 
-func (s *State) shouldForward(r *http.Request, rm *mux.RouteMatch) bool {
+func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
+	id := path.Base(r.URL.Path)
+	if id == strconv.Itoa(s.hash.GetShardId(s.address)) {
+		log.Printf("Id %q is serviced by this node\n", id)
+		return false
+	} else {
+
+		// Store the target node address in the http request context.
+
+		id, err := strconv.Atoi(id)
+		if err != nil {
+			log.Printf("Failed to strconv Id %q\n", id)
+			return false
+		}
+
+		targetNode := s.hash.GetReplicas(id)[0]
+		log.Printf("Id %q is serviced by %q\n", id, targetNode)
+		ctx := context.WithValue(r.Context(), ADDRESS_KEY, targetNode)
+		*r = *(r.WithContext(ctx))
+		return true
+	}
+}
+
+func (s *State) shouldForwardKey(r *http.Request, rm *mux.RouteMatch) bool {
 	key := path.Base(r.URL.Path)
 	nodeAddr, err := s.hash.Get(key)
 	return s.shouldForwardToNode(r, key, nodeAddr, err)
@@ -127,4 +154,87 @@ func (s *State) forwardMessage(w http.ResponseWriter, r *http.Request) {
 	result.Status = resp.StatusCode
 	result.Address = nodeAddr
 	return
+}
+
+func (s *State) getShardInfo(view types.View, CausalCtx clock.VectorClock) []types.Shard {
+	replFactor := view.ReplFactor
+	shardTotal := len(view.Members) / replFactor
+	shards := make([]types.Shard, shardTotal)
+	var wg sync.WaitGroup
+
+	log.Println("Requesting key counts from the other shards")
+	for i := range shards {
+		wg.Add(1)
+		go func(addr string, shard *types.Shard, shardID int) {
+			defer wg.Done()
+
+			// Set the address and an invalid value before we found out the
+			// actual value
+
+			shard.KeyCount = -1
+			// Don't make a request if it's just ourselves
+			if addr == s.address {
+				shard.Id = &shardID
+				err, KeyCount, _ := s.store.NumKeys(CausalCtx)
+				if err != nil {
+					log.Printf("Failed to get NumKeys for addr %q: %v", addr, err)
+				}
+				shard.KeyCount = KeyCount
+				return
+			}
+
+			Context, err := json.Marshal(CausalCtx)
+			if err != nil {
+				log.Println("Failed to Causal Ctx", err)
+			}
+
+			target, err := url.Parse(util.CorrectURL(addr))
+			if err != nil {
+				log.Println("Bad forwarding address")
+				return
+			}
+
+			target.Path = path.Join(target.Path, SHARD_ENDPOINT+"/"+strconv.Itoa(shardID))
+			// Dispatch a get request to the other node
+			request, err := http.NewRequest(http.MethodGet,
+				target.String(),
+				bytes.NewBuffer(Context))
+			if err != nil {
+				log.Printf("Failed to build request to %q: %v\n", addr, err)
+				return
+			}
+
+			request.Header.Set("Content-Type", "application/json")
+
+			resp, err := s.cli.Do(request)
+			if err != nil {
+				log.Printf("Failed to send request to %q: %v\n", addr, err)
+				return
+
+			}
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Shard at %q returned %d for key count\n", addr, resp.StatusCode)
+				return
+			}
+
+			// Parse the response
+			var response types.Response
+			if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+				log.Printf("Failed to parse response from %q: %v\n", addr, err)
+				return
+			}
+
+			if response.KeyCount == nil {
+				log.Printf("Response from %q does not have a key count\n", addr)
+				return
+			}
+
+			// We actually got a response!
+			shard.Id = response.ShardId
+			shard.KeyCount = *response.KeyCount
+		}(view.Members[i*replFactor], &shards[i], i+1)
+	}
+
+	wg.Wait()
+	return shards
 }

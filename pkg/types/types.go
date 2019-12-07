@@ -29,9 +29,10 @@ type Response struct {
 	Replaced *bool  `json:"replaced,omitempty"`
 
 	// Info about the state of shards
-	Shards   []Shard `json:"shards,omitempty"`
-	KeyCount *int    `json:"key-count,omitempty"`
-
+	Shards   []Shard  `json:"shards,omitempty"`
+	KeyCount *int     `json:"key-count,omitempty"`
+	ShardId  *int     `json:"shard-id,omitempty"`
+	Replicas []string `json:"replicas,omitempty"`
 	// Potential forwarding metadata
 	Address string `json:"address,omitempty"`
 
@@ -40,7 +41,8 @@ type Response struct {
 }
 
 type Shard struct {
-	Address  string `json:"address"`
+	Id       *int   `json:"shard-id,omitempty"`
+	Address  string `json:"address,omitempty"`
 	KeyCount int    `json:"key-count"`
 }
 

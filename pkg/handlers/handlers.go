@@ -101,6 +101,26 @@ func (s *State) putHandler(in types.Input, res *types.Response) {
 	}
 }
 
+func (s *State) idHandler(in types.Input, res *types.Response) {
+	err, KeyCount, CausalCtx := s.store.NumKeys(in.CausalCtx)
+	if err != nil {
+		log.Println("Error on id handler", err)
+	}
+	id := s.hash.GetShardId(s.address)
+	res.ShardId = &id
+	res.Message = msg.ShardInfoSuccess
+	res.KeyCount = &KeyCount
+	res.CausalCtx = CausalCtx
+	res.Replicas = s.hash.GetReplicas(id)
+}
+
+func (s *State) shardsHandler(in types.Input, res *types.Response) {
+	view := s.hash.GetView()
+	res.Shards = s.getShardInfo(view, in.CausalCtx)
+	res.Message = msg.ShardMembSuccess
+	res.CausalCtx = in.CausalCtx
+}
+
 func NewState(ctx context.Context, addr string, view types.View) *State {
 	journal := make(chan store.Entry, 10)
 	hash := hash.New(view)
@@ -124,9 +144,14 @@ func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
-	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForward).Methods(http.MethodPut, http.MethodDelete)
+	r.HandleFunc("/kv-store/shards", types.WrapHTTP(s.shardsHandler)).Methods(http.MethodGet)
+	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", s.forwardMessage).MatcherFunc(s.shouldForwardId).Methods(http.MethodGet)
+	r.HandleFunc("/kv-store/shards/{key:[0-9]+}", types.WrapHTTP(s.idHandler)).Methods(http.MethodGet)
+
+	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForwardKey).Methods(http.MethodPut, http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", s.forwardMessage).MatcherFunc(s.shouldForwardRead).Methods(http.MethodGet)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.putHandler))).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)
+
 }

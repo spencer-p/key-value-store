@@ -116,12 +116,30 @@ func (m *Hash) GetShardId(member string) int {
 	return i/m.replFactor + 1
 }
 
+func (m *Hash) GetReplicationFactor() int {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	return m.replFactor
+}
+
 // Members returns the list of nodes in this hash.
 func (m *Hash) Members() []string {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
 	return m.elts
+}
+
+// Returns view address and replication factor
+func (m *Hash) GetView() types.View {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	var view types.View
+	view.Members = m.elts
+	view.ReplFactor = m.replFactor
+	return view
 }
 
 // Test and set performs an atomic Set operation iff the new member slice is
