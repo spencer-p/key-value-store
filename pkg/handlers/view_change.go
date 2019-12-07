@@ -37,7 +37,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 // TODO collect from secondaries
 // return our func (s *State) primaryCollect(in types.Input, res *types.Response) types.Response {
 func (s *State) primaryCollect(in types.Input, res *types.Response) {
-	replicas := s.store.GetReplicas()
+	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
 	clockCh := make(chan clock.VectorClock)
 	var wg sync.WaitGroup
 
