@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"path"
 
+	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
+	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 )
@@ -25,9 +27,89 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 		return
 	}
 
-	log.Printf("Received view change %#v\n", in.View)
+	log.Printf("Received view change %#v, acting as coordinator\n", in.View)
+	oldview := s.hash.GetView()
+	nshards := len(oldview.Members) / oldview.ReplFactor
+	storageCh := make(chan []store.Entry)
 
-	// TODO coordinator view change
+	// Retrieve a full storage object from each shard
+	for i := 0; i < nshards; i++ {
+		go func(replicas []string, shardId int) {
+			// Try to reach a primary node on each shard in order
+			var response types.Response
+			for _, primary := range replicas {
+				log.Println("Attempting to fetch shard", shardId, "state from", primary)
+				httpResp, err := s.sendHttp(
+					http.MethodGet,
+					primary, "/view-change/primary-collect",
+					&in, &response)
+				if err != nil {
+					log.Printf("Failed to send collect from primary %q for shard %d: %v\n", primary, shardId, err)
+					continue
+				} else if httpResp.StatusCode != http.StatusOK {
+					log.Printf("Failed to collect from primary %q for shard %d: %v\n", primary, shardId, err)
+					continue
+				}
+
+				// The primary we tried returned a storage object. hooray!
+				storageCh <- response.StorageState
+			}
+
+			log.Println("All replicas in shard", shardId, "were unreachable. Ignoring shard.")
+			storageCh <- []store.Entry{}
+		}(oldview.Members[i*oldview.ReplFactor:(i+1)*oldview.ReplFactor], i+1)
+	}
+
+	// Accumulate all the states and remap them onto each shard
+	statesByPrimary := make(map[string][]store.Entry)
+	newhash := hash.New(in.View)
+	for i := 0; i < nshards; i++ {
+		state := <-storageCh
+		for si := range state {
+			primary, err := newhash.Get(state[si].Key)
+			if err != nil {
+				log.Printf("Failed to get primary for key %q: %v", state[si].Key, err)
+				log.Println("Ignoring key")
+			}
+			statesByPrimary[primary] = append(statesByPrimary[primary], state[si])
+		}
+	}
+
+	// Send all the new states to primary replace
+	for primary := range statesByPrimary {
+		go func(primary string, state []store.Entry) {
+			var response types.Response
+			httpResp, err := s.sendHttp(
+				http.MethodPut,
+				primary, "/view-change/primary-replace",
+				&types.Input{View: in.View, StorageState: state}, &response)
+			if err != nil {
+				log.Printf("Failed to send state to primary %q: %v\n", primary, err)
+				return
+			} else if httpResp.StatusCode != http.StatusOK {
+				log.Printf("Primary %q did not accept state: status code %d\n", primary, httpResp.StatusCode)
+				return
+			}
+
+			log.Println("Primary at", primary, "accepted new state")
+		}(primary, statesByPrimary[primary])
+	}
+
+	// Calculate all the shard info
+	nshards = len(in.View.Members) / in.View.ReplFactor
+	res.Shards = make([]types.Shard, nshards)
+	for i := 1; i <= nshards; i++ {
+		replicas := newhash.GetReplicas(i)
+		res.Shards[i-1] = types.Shard{
+			Id:       i,
+			Replicas: replicas,
+			KeyCount: len(statesByPrimary[replicas[0]]),
+		}
+	}
+
+	// Set the final info!
+	res.Message = msg.ViewChangeSuccess
+	res.CausalCtx = s.store.Clock() // This is silly. This particular node's clock might be meaningless
 }
 
 func (s *State) primaryCollect(in types.Input, res *types.Response) {
@@ -41,11 +123,11 @@ func (s *State) primaryReplace(in types.Input, res *types.Response) {
 }
 
 func (s *State) secondaryCollect(in types.Input, res *types.Response) {
-	s.hash.TestAndSet(in.View)
 	res.CausalCtx = s.store.Clock()
 }
 
 func (s *State) secondaryReplace(in types.Input, res *types.Response) {
+	s.hash.TestAndSet(in.View)
 	s.store.ReplaceEntries(in.StorageState)
 }
 

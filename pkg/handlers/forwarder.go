@@ -174,7 +174,7 @@ func (s *State) getShardInfo(view types.View, CausalCtx clock.VectorClock) []typ
 			shard.KeyCount = -1
 			// Don't make a request if it's just ourselves
 			if addr == s.address {
-				shard.Id = &shardID
+				shard.Id = shardID
 				err, KeyCount, _ := s.store.NumKeys(CausalCtx)
 				if err != nil {
 					log.Printf("Failed to get NumKeys for addr %q: %v", addr, err)
@@ -205,7 +205,7 @@ func (s *State) getShardInfo(view types.View, CausalCtx clock.VectorClock) []typ
 			}
 
 			// We actually got a response!
-			shard.Id = response.ShardId
+			shard.Id = *response.ShardId
 			shard.KeyCount = *response.KeyCount
 		}(view.Members[i*replFactor], &shards[i], i+1)
 	}

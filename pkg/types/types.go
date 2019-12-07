@@ -46,9 +46,9 @@ type Response struct {
 }
 
 type Shard struct {
-	Id       *int   `json:"shard-id,omitempty"`
-	Address  string `json:"address,omitempty"`
-	KeyCount int    `json:"key-count"`
+	Id       int      `json:"shard-id"`
+	Replicas []string `json:"replicas"`
+	KeyCount int      `json:"key-count"`
 }
 
 // Input stores arguments to each api request
