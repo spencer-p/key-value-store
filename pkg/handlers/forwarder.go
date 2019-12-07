@@ -44,7 +44,7 @@ func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
 
 		id, err := strconv.Atoi(id)
 		if err != nil {
-			log.Printf("Failed to strconv id\n", id)
+			log.Printf("Failed to strconv id %q\n", id)
 			return false
 		}
 
