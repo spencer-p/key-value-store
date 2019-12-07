@@ -90,7 +90,7 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 
 	err := s.store.WaitUntilCurrent(waiting)
 	if err != nil {
-		log.Printf("Wait until current error", err)
+		log.Println("Wait until current error", err)
 		res.Status = http.StatusServiceUnavailable
 		return
 	}
