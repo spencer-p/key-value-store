@@ -200,13 +200,18 @@ func (s *State) getShardInfo(view types.View, CausalCtx clock.VectorClock) []typ
 				target.String(),
 				bytes.NewBuffer(Context))
 			if err != nil {
-				log.Printf("Failed to send a req to %q: %v\n", addr, err)
+				log.Printf("Failed to build request to %q: %v\n", addr, err)
 				return
 			}
 
 			request.Header.Set("Content-Type", "application/json")
 
 			resp, err := s.cli.Do(request)
+			if err != nil {
+				log.Printf("Failed to send request to %q: %v\n", addr, err)
+				return
+
+			}
 			if resp.StatusCode != http.StatusOK {
 				log.Printf("Shard at %q returned %d for key count\n", addr, resp.StatusCode)
 				return
