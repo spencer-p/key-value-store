@@ -38,9 +38,7 @@ func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
 		return false
 	} else {
 
-		//TODO find address of shardId
 		// Store the target node address in the http request context.
-		view := s.hash.Members()
 
 		id, err := strconv.Atoi(id)
 		if err != nil {
@@ -48,7 +46,9 @@ func (s *State) shouldForwardId(r *http.Request, rm *mux.RouteMatch) bool {
 			return false
 		}
 
-		replFactor := s.hash.GetReplicationFactor()
+		viewInfo := s.hash.GetView()
+		view := viewInfo.Members
+		replFactor := viewInfo.ReplFactor
 		shardIndex := (len(view) / replFactor) * (id - 1)
 		log.Printf("Id %q is serviced by %q\n", id, view[shardIndex])
 		ctx := context.WithValue(r.Context(), ADDRESS_KEY, view[shardIndex])

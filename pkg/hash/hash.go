@@ -131,6 +131,16 @@ func (m *Hash) Members() []string {
 	return m.elts
 }
 
+func (m *Hash) GetView() types.View {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	var view types.View
+	view.Members = m.Members()
+	view.ReplFactor = m.GetReplicationFactor()
+	return view
+}
+
 // Test and set performs an atomic Set operation iff the new member slice is
 // different than the old. Returns true if the member slice changed.
 func (m *Hash) TestAndSet(view types.View) bool {
