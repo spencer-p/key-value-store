@@ -183,44 +183,19 @@ func (s *State) getShardInfo(view types.View, CausalCtx clock.VectorClock) []typ
 				return
 			}
 
-			Context, err := json.Marshal(CausalCtx)
+			var response types.Response
+			resp, err := s.sendHttp(http.MethodGet,
+				addr,
+				SHARD_ENDPOINT+"/"+strconv.Itoa(shardID),
+				CausalCtx,
+				&response)
 			if err != nil {
-				log.Println("Failed to Causal Ctx", err)
-			}
-
-			target, err := url.Parse(util.CorrectURL(addr))
-			if err != nil {
-				log.Println("Bad forwarding address")
+				log.Printf("Failed to send http to %q: %v\n", addr, err)
 				return
 			}
 
-			target.Path = path.Join(target.Path, SHARD_ENDPOINT+"/"+strconv.Itoa(shardID))
-			// Dispatch a get request to the other node
-			request, err := http.NewRequest(http.MethodGet,
-				target.String(),
-				bytes.NewBuffer(Context))
-			if err != nil {
-				log.Printf("Failed to build request to %q: %v\n", addr, err)
-				return
-			}
-
-			request.Header.Set("Content-Type", "application/json")
-
-			resp, err := s.cli.Do(request)
-			if err != nil {
-				log.Printf("Failed to send request to %q: %v\n", addr, err)
-				return
-
-			}
 			if resp.StatusCode != http.StatusOK {
 				log.Printf("Shard at %q returned %d for key count\n", addr, resp.StatusCode)
-				return
-			}
-
-			// Parse the response
-			var response types.Response
-			if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
-				log.Printf("Failed to parse response from %q: %v\n", addr, err)
 				return
 			}
 
