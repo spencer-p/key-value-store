@@ -39,9 +39,8 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
 	clockCh := make(chan clock.VectorClock)
 
-	log.Println("Requesting key counts from the other shards")
 	for i := range replicas {
-		go func(addr string, replicaNum int) {
+		go func(addr string) {
 			// Don't make a request if it's just ourselves
 			if addr == s.address {
 				context := s.store.Clock()
@@ -68,7 +67,7 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 			}
 
 			clockCh <- response.CausalCtx
-		}(replicas[i], i+1)
+		}(replicas[i])
 	}
 	waiting := clock.VectorClock{}
 	for _ = range replicas {
@@ -76,6 +75,7 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 		waiting.Max(c)
 	}
 
+	log.Println("Waiting for clock", waiting)
 	err := s.store.WaitUntilCurrent(waiting)
 	if err != nil {
 		log.Println("Wait until current error", err)
