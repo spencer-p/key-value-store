@@ -43,7 +43,9 @@ func (s *State) primaryReplace(in types.Input, res *types.Response) {
 	s.store.SetReplicas(in.View.Members)
 	var wg sync.WaitGroup
 
-	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
+	shardId := s.hash.GetShardId(s.address)
+	log.Printf("Sending replacement batch to all replicas in shard %d\n", shardId)
+	replicas := s.hash.GetReplicas(shardId)
 	for _, replicaAddr := range replicas {
 		if replicaAddr == s.address {
 			continue
