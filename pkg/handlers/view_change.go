@@ -11,7 +11,6 @@ import (
 
 	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
-	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 )

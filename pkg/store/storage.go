@@ -215,15 +215,23 @@ func (s *Store) String() string {
 func (s *Store) AllEntries() []Entry {
 	s.m.Lock()
 	defer s.m.Unlock()
-	// TODO iterate through all the entries and accumulate them
-	return nil
+	entries := make([]Entry, len(s.store))
+	i := 0
+	for _, e := range s.store {
+		entries[i] = e
+		i++
+	}
+	return entries
 }
 
 // ReplaceEntries atomically replaces all the entries with the given slice.
 func (s *Store) ReplaceEntries(entries []Entry) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	// TODO Set the map to nothing, assign all the entries to their key
+	s.store = make(map[string]Entry)
+	for _, e := range entries {
+		s.store[e.Key] = e
+	}
 }
 
 // Clock returns the current vector clock.
