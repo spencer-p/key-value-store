@@ -34,9 +34,15 @@ func (s *State) dispatchGossip(ctx context.Context, journal <-chan store.Entry) 
 }
 
 func (s *State) receiveGossip(w http.ResponseWriter, r *http.Request) {
-	dec := json.NewDecoder(r.Body)
+	var res types.GossipResponse
+	defer func() {
+		if err := json.NewEncoder(w).Encode(&res); err != nil {
+			log.Println("Failed to encode gossip response:", err)
+		}
+	}()
+
 	var e store.Entry
-	if err := dec.Decode(&e); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
 		log.Println("Received malformed gossip:", err)
 		return
 	}
@@ -46,13 +52,10 @@ func (s *State) receiveGossip(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Failed to import entry %v: %v\n", e, err)
 		http.Error(w, "cannot apply gossip", http.StatusServiceUnavailable)
+		return
 	}
 
-	var res types.GossipResponse
 	res.Imported = imported
-	if err := json.NewEncoder(w).Encode(&res); err != nil {
-		log.Println("Failed to encode gossip response:", err)
-	}
 }
 
 func (s *State) sendGossip(ctx context.Context, e store.Entry, node string) {
