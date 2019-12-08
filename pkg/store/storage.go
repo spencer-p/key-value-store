@@ -229,8 +229,10 @@ func (s *Store) ReplaceEntries(entries []Entry) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	s.store = make(map[string]Entry)
+	s.vc = clock.VectorClock{}
 	for _, e := range entries {
 		s.store[e.Key] = e
+		s.vc.Max(e.Clock)
 	}
 }
 

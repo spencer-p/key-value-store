@@ -118,7 +118,7 @@ func (s *State) shardsHandler(in types.Input, res *types.Response) {
 	view := s.hash.GetView()
 	res.Shards = s.getShardInfo(view, in.CausalCtx)
 	res.Message = msg.ShardMembSuccess
-	res.CausalCtx = in.CausalCtx
+	res.CausalCtx = s.store.Clock()
 }
 
 func NewState(ctx context.Context, addr string, view types.View) *State {

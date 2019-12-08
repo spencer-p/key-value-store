@@ -75,12 +75,13 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	for i := 0; i < nshards; i++ {
 		state := <-storageCh
 		for si := range state {
-			primary, err := newhash.Get(state[si].Key)
+			shardId, err := newhash.GetKeyShardId(state[si].Key)
 			if err != nil {
 				log.Printf("Failed to get primary for key %q: %v", state[si].Key, err)
 				log.Println("Ignoring key")
 				continue
 			}
+			primary := newhash.GetReplicas(shardId)[0]
 			statesByPrimary[primary] = append(statesByPrimary[primary], state[si])
 		}
 	}
@@ -109,8 +110,6 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 		}(primary, statesByPrimary[primary])
 	}
 	wg.Wait()
-
-	log.Println("View change complete")
 
 	// Calculate all the shard info
 	nshards = len(in.View.Members) / in.View.ReplFactor
@@ -187,11 +186,12 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 	}
 
 	res.StorageState = s.store.AllEntries()
-	log.Println("Up to date, sending the state...", res.StorageState)
+	log.Println("Up to date, sending the state with", len(res.StorageState), "entries")
 }
 
 func (s *State) primaryReplace(in types.Input, res *types.Response) {
 	s.hash.TestAndSet(in.View)
+	log.Println("Replacing storage with", len(in.StorageState), "entries")
 	s.store.ReplaceEntries(in.StorageState)
 	s.store.SetReplicas(in.View.Members)
 	var wg sync.WaitGroup
@@ -235,6 +235,7 @@ func (s *State) secondaryCollect(in types.Input, res *types.Response) {
 
 func (s *State) secondaryReplace(in types.Input, res *types.Response) {
 	s.hash.TestAndSet(in.View)
+	log.Println("Replacing storage with", len(in.StorageState), "entries")
 	s.store.ReplaceEntries(in.StorageState)
 	s.store.SetReplicas(in.View.Members)
 }
