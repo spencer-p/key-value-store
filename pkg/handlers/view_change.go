@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	SECONDARYREPLACE_ENDPOINT = "/kv-store/view-change/secondary-replace"
+	SECONDARYREPLACE_ENDPOINT  = "/kv-store/view-change/secondary-replace"
 	PRIMARY_COLLECT_ENDPOINT   = "/kv-store/primary-collect"
 	SECONDARY_COLLECT_ENDPOINT = "/kv-store/secondary-collect"
 	VIEWCHANGE_ENDPOINT        = "/kv-store/view-change"
