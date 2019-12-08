@@ -148,6 +148,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 func (s *State) primaryCollect(in types.Input, res *types.Response) {
 	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
 	clockCh := make(chan clock.VectorClock)
+	log.Println("Primary collect at shard clock", s.store.Clock().Subset(replicas))
 
 	for i := range replicas {
 		go func(addr string) {
@@ -185,7 +186,7 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 		waiting.Max(c)
 	}
 
-	log.Println("Waiting for clock", waiting)
+	log.Println("Waiting for clock", waiting.Subset(replicas))
 	err := s.store.WaitUntilCurrent(waiting)
 	if err != nil {
 		log.Println("Wait until current error", err)
@@ -239,6 +240,7 @@ func (s *State) primaryReplace(in types.Input, res *types.Response) {
 
 func (s *State) secondaryCollect(in types.Input, res *types.Response) {
 	res.CausalCtx = s.store.Clock()
+	log.Println("Primary collect at shard clock", res.CausalCtx.Subset(s.hash.GetReplicas(s.hash.GetShardId(s.address))))
 }
 
 func (s *State) secondaryReplace(in types.Input, res *types.Response) {

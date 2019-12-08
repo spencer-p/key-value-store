@@ -51,7 +51,7 @@ func (s *State) receiveGossip(w http.ResponseWriter, r *http.Request) {
 	imported, err := s.store.ImportEntry(e)
 	if err != nil {
 		log.Printf("Failed to import entry %v: %v\n", e, err)
-		http.Error(w, "cannot apply gossip", http.StatusServiceUnavailable)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
