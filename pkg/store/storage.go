@@ -97,6 +97,12 @@ func (s *Store) ImportEntry(e Entry) (imported bool, err error) {
 		return false, err
 	}
 
+	// If we already have it, we are good
+	if existing, ok := s.store[e.Key]; ok && existing.Version.Equal(e.Version) {
+		log.Printf("Import of %q already exists on this node. ACKing", e.Key)
+		return true, nil
+	}
+
 	// if i receive gossip. from the past.  and i do not have a more recent
 	// entry for said entry.  then.  i may. commit. said entry.
 	if e.Clock.Subset(s.replicas).Compare(s.vc.Subset(s.replicas)) == clock.Less {
