@@ -269,6 +269,7 @@ func (s *Store) waitUntilCurrent(incoming clock.VectorClock) error {
 		if cmp := incoming.Compare(s.vc.Subset(s.replicas)); cmp != clock.Greater {
 			return nil
 		}
+		log.Printf("Current shard clock is %v,\nincoming request is at %v", s.vc.Subset(s.replicas), incoming)
 		s.vcCond.Wait()
 	}
 }
