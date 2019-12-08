@@ -201,7 +201,7 @@ func (s *State) primaryReplace(in types.Input, res *types.Response) {
 	s.hash.TestAndSet(in.View)
 	log.Println("Replacing storage with", len(in.StorageState), "entries")
 	s.store.ReplaceEntries(in.StorageState)
-	s.store.SetReplicas(in.View.Members)
+	s.store.SetReplicas(s.hash.GetReplicas(s.hash.GetShardId(s.address)))
 	var wg sync.WaitGroup
 
 	shardId := s.hash.GetShardId(s.address)
@@ -245,7 +245,7 @@ func (s *State) secondaryReplace(in types.Input, res *types.Response) {
 	s.hash.TestAndSet(in.View)
 	log.Println("Replacing storage with", len(in.StorageState), "entries")
 	s.store.ReplaceEntries(in.StorageState)
-	s.store.SetReplicas(in.View.Members)
+	s.store.SetReplicas(s.hash.GetReplicas(s.hash.GetShardId(s.address)))
 }
 
 // sendHttp builds a request and issues it with a JSON body matching input.
