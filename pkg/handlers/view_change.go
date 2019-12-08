@@ -3,14 +3,12 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"sync"
+	"net/url"
+	"path"
 
-	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
-	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 )
@@ -29,211 +27,65 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 
 	log.Printf("Received view change %#v\n", in.View)
 
-	viewIsNew := s.hash.TestAndSet(in.View)
-	if viewIsNew {
-		log.Println("This view is new information")
-		// We just set a new view. We have keys that need to move to other
-		// nodes.
-		batches := s.getBatches()
-		offloaded, err := s.dispatchBatches(in.View, batches)
-		if err != nil {
-			log.Println("Failed to offload some keys:", err)
-		}
-		s.deleteEntries(offloaded)
-	}
-
-	// Always apply the diff - we will get many of these
-	log.Println("Applying a batch of", len(in.Batch), "keys")
-	s.applyBatch(in.Batch)
-
-	if !(!in.Internal && viewIsNew) {
-		// We are not the first node to receive the view change - no further
-		// action is required.
-		res.Message = msg.PartialViewChangeSuccess
-		return
-	}
-
-	// We're the node that initiated the view change -- return a meaningful
-	// response to the oracle
-	log.Println("Cluster's view change is committed to all nodes")
-	res.Message = msg.ViewChangeSuccess
-	res.Shards = s.getKeyCounts(in.View.Members) // TODO use the hash object
+	// TODO coordinator view change
 }
 
-// getBatches retrieves all batches of keys that should be on other nodes and
-// returns them.
-func (s *State) getBatches() map[string][]types.Entry {
-	batches := make(map[string][]types.Entry)
-	s.store.For(func(key string, e store.Entry) store.IterAction {
-		target, err := s.hash.Get(key)
-		value := e.Value
-		if err != nil {
-			log.Printf("Invalid key %q=%q: %v. Dropping.\n", key, value, err)
-		}
-
-		if target != s.address {
-			batches[target] = append(batches[target], types.Entry{
-				Key:   key,
-				Value: value,
-			})
-		}
-		return store.CONTINUE
-	})
-	return batches
+func (s *State) primaryCollect(in types.Input, res *types.Response) {
+	// TODO collect from secondaries
+	// return our state
 }
 
-// deleteEntries removes the given batches from our own state.
-func (s *State) deleteEntries(entries []types.Entry) {
-	log.Println("Deleting", len(entries), "offloaded keys")
-	for _ = range entries {
-		// TODO Force these deletes somehow (or don't?)
-		//s.store.Delete(clock.VectorClock{}, entries[i].Key)
-	}
+func (s *State) primaryReplace(in types.Input, res *types.Response) {
+	s.store.ReplaceEntries(in.StorageState)
+	// TODO dispatch the same input to all of the secondaries
 }
 
-// dispatchBatches forwards a view change to all other nodes in the view.
-// A list of batches that were successfully dispatched is returned with an error.
-func (s *State) dispatchBatches(view types.View, batches map[string][]types.Entry) ([]types.Entry, error) {
-	var wg sync.WaitGroup
-	var finalerr error
-	deletech := make(chan []types.Entry)
-	donech := make(chan struct{})
-
-	// Spin up a goroutine to send each batch to each node
-	for i := range view.Members {
-		wg.Add(1)
-		go func(addr string, batch []types.Entry) {
-			defer wg.Done()
-			log.Printf("Sending view/batch with %d keys to %q\n", len(batch), addr)
-			err := s.sendBatch(addr, types.Input{
-				View:  view,
-				Batch: batch,
-			})
-			if err != nil {
-				log.Printf("Failed to deliver batch to %q: %v\n", addr, err)
-				finalerr = err
-				return
-			}
-			deletech <- batch
-		}(view.Members[i], batches[view.Members[i]])
-	}
-
-	// Wait for all the goroutines to terminate.
-	// When the waitgroup is done, everything in the deletech has been
-	// processed. We can then notify ourselves via donech and close both
-	// channels.
-	go func() {
-		wg.Wait()
-		donech <- struct{}{}
-		close(donech)
-		close(deletech)
-	}()
-
-	// Accumulate all the keys that have been successfully offloaded and return
-	// them with a potential error when done
-	var offloaded []types.Entry
-	for {
-		select {
-		case <-donech:
-			return offloaded, finalerr
-		case todelete := <-deletech:
-			log.Println(len(todelete), "keys offloaded")
-			offloaded = append(offloaded, todelete...)
-		}
-	}
+func (s *State) secondaryCollect(in types.Input, res *types.Response) {
+	s.hash.TestAndSet(in.View)
+	res.CausalCtx = s.store.Clock()
 }
 
-func (s *State) applyBatch(batch []types.Entry) {
-	for _, _ = range batch {
-		// TODO these need to be stored better
-		//s.store.Set(e.Key, e.Value)
-	}
+func (s *State) secondaryReplace(in types.Input, res *types.Response) {
+	s.store.ReplaceEntries(in.StorageState)
 }
 
-// sendBatch sends a types.Input to the target node's address.
-func (s *State) sendBatch(target string, payload types.Input) error {
-	payload.Internal = true
-
-	// Encode the payload to a buffer
+// sendHttp builds a request and issues it with a JSON body matching input.
+// The response is unmarshalled into response and the http response is returned (or an error).
+func (s *State) sendHttp(method, address, endpoint string, input, response interface{}) (*http.Response, error) {
+	// Encode the input body
 	var body bytes.Buffer
-	enc := json.NewEncoder(&body)
-	err := enc.Encode(payload)
+	if err := json.NewEncoder(&body).Encode(input); err != nil {
+		return nil, err
+	}
+
+	// Build the target URL
+	target, err := url.Parse(util.CorrectURL(address))
 	if err != nil {
-		return fmt.Errorf("failed to encode payload: %w", err)
+		log.Printf("Bad forwarding address %q: %v\n", address, err)
+		return nil, err
 	}
+	target.Path = path.Join(target.Path, endpoint)
 
-	// Build a request with our payload to the target address
-	target = util.CorrectURL(target + VIEWCHANGE_ENDPOINT)
-	req, err := http.NewRequest(http.MethodPut, target, &body)
+	// Build request
+	request, err := http.NewRequest(method, target.String(), &body)
 	if err != nil {
-		return fmt.Errorf("failed to build request: %w", err)
+		log.Printf("Failed to build request to %q: %v\n", address, err)
+		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Content-Type", "application/json")
 
-	// Send the request & return a useful result
-	resp, err := s.cli.Do(req)
+	// Send request
+	resp, err := s.cli.Do(request)
 	if err != nil {
-		return fmt.Errorf("failed to do view change request: %w", err)
+		log.Printf("Failed to send request to %q: %v\n", address, err)
+		return nil, err
 	}
 
-	// TODO Parse the response
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("non-200 status code: %d", resp.StatusCode)
-	}
-	return nil
-}
-
-// getKeyCounts retrieves information about the shards for the given view.
-func (s *State) getKeyCounts(view []string) []types.Shard {
-	shards := make([]types.Shard, len(view))
-	var wg sync.WaitGroup
-
-	log.Println("Requesting key counts from the other nodes")
-	for i := range view {
-		wg.Add(1)
-		go func(addr string, shard *types.Shard) {
-			defer wg.Done()
-
-			// Set the address and an invalid value before we found out the
-			// actual value
-			shard.Address = addr
-			shard.KeyCount = -1
-
-			// Don't make a request if it's just ourselves
-			if addr == s.address {
-				// TODO do something smarter
-				_, shard.KeyCount, _ = s.store.NumKeys(clock.VectorClock{})
-				return
-			}
-
-			// Dispatch a get request to the other node
-			resp, err := s.cli.Get(util.CorrectURL(addr) + KEYCOUNT_ENDPOINT)
-			if err != nil {
-				log.Printf("Failed to send a req to %q: %v\n", addr, err)
-				return
-			}
-			if resp.StatusCode != http.StatusOK {
-				log.Printf("Node at %q returned %d for key count\n", addr, resp.StatusCode)
-				return
-			}
-
-			// Parse the response
-			var response types.Response
-			if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
-				log.Printf("Failed to parse response from %q: %v\n", addr, err)
-				return
-			}
-
-			if response.KeyCount == nil {
-				log.Printf("Response from %q does not have a key count\n", addr)
-				return
-			}
-
-			// We actually got a response!
-			shard.KeyCount = *response.KeyCount
-		}(view[i], &shards[i])
+	// Parse the response
+	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Printf("Failed to parse response from %q: %v\n", address, err)
+		return nil, err
 	}
 
-	wg.Wait()
-	return shards
+	return resp, nil
 }

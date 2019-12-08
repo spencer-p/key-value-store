@@ -62,7 +62,7 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	defer s.copyClock(&currentClock)
 
 	// Wait for a state that can accept our write
-	if err = s.waitUntilCurrent(tcausal); err != nil {
+	if err = s.WaitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -99,7 +99,7 @@ func (s *Store) Delete(tcausal clock.VectorClock, key string) (
 	s.m.Lock()
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
-	if err = s.waitUntilCurrent(tcausal); err != nil {
+	if err = s.WaitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -156,7 +156,7 @@ func (s *Store) Read(tcausal clock.VectorClock, key string) (
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
 
-	if err = s.waitUntilCurrent(tcausal); err != nil {
+	if err = s.WaitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -177,7 +177,7 @@ func (s *Store) NumKeys(tcausal clock.VectorClock) (
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
 
-	if err = s.waitUntilCurrent(tcausal); err != nil {
+	if err = s.WaitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -211,10 +211,40 @@ func (s *Store) String() string {
 	return fmt.Sprintf("%v %+v", s.vc, s.store)
 }
 
-// waitUntilCurrent returns a function that stalls until the waiting vector
+// AllEntries returns a slice of all entries in this store.
+func (s *Store) AllEntries() []Entry {
+	s.m.Lock()
+	defer s.m.Unlock()
+	entries := make([]Entry, len(s.store))
+	i := 0
+	for _, e := range s.store {
+		entries[i] = e
+		i++
+	}
+	return entries
+}
+
+// ReplaceEntries atomically replaces all the entries with the given slice.
+func (s *Store) ReplaceEntries(entries []Entry) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.store = make(map[string]Entry)
+	for _, e := range entries {
+		s.store[e.Key] = e
+	}
+}
+
+// Clock returns the current vector clock.
+func (s *Store) Clock() clock.VectorClock {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.vc.Copy()
+}
+
+// WaitUntilCurrent returns a function that stalls until the waiting vector
 // clock is not causally from the future.  the write mutex must be held on the
 // store.
-func (s *Store) waitUntilCurrent(incoming clock.VectorClock) error {
+func (s *Store) WaitUntilCurrent(incoming clock.VectorClock) error {
 	incoming = incoming.Subset(s.replicas)
 	for {
 		// As long as this clock is not from the future, we can apply it.
