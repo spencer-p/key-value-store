@@ -84,6 +84,7 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 	}
 
 	res.StorageState = s.store.AllEntries()
+	log.Println("Up to date, sending the state...", res.StorageState)
 }
 
 func (s *State) primaryReplace(in types.Input, res *types.Response) {
