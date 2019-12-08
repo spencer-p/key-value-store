@@ -17,11 +17,12 @@ var (
 // Entry describes a full data point in the store.
 // The value is required. Other fields are semi-optional depending on the context.
 type Entry struct {
-	Key     string            `json:"key"`
-	Value   string            `json:"value"`
-	Deleted bool              `json:"deleted"`
-	Clock   clock.VectorClock `json:"clock"`
-	Version uuid.UUID         `json:"version"`
+	Key         string            `json:"key"`
+	Value       string            `json:"value"`
+	Deleted     bool              `json:"deleted"`
+	Clock       clock.VectorClock `json:"clock"`
+	Version     uuid.UUID         `json:"version"`
+	NodeHistory map[string]bool   `json:"history"`
 }
 
 type Store struct {
@@ -153,8 +154,9 @@ func (s *Store) commitWrite(e Entry) (replaced bool) {
 	s.vc.Increment(s.addr)
 	s.vcCond.Broadcast() // let others know this update happened once we release the lock
 
-	// Mark the clock & version
+	// Mark the clock
 	e.Clock = s.vc.Copy()
+	e.NodeHistory[s.addr] = true
 
 	// Perform the write
 	s.store[e.Key] = e
