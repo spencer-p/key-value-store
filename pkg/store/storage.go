@@ -156,6 +156,9 @@ func (s *Store) commitWrite(e Entry) (replaced bool) {
 
 	// Mark the clock
 	e.Clock = s.vc.Copy()
+	if e.NodeHistory == nil {
+		e.NodeHistory = make(map[string]bool)
+	}
 	e.NodeHistory[s.addr] = true
 
 	// Perform the write
