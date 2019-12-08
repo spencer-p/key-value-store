@@ -237,6 +237,7 @@ func (s *State) secondaryCollect(in types.Input, res *types.Response) {
 func (s *State) secondaryReplace(in types.Input, res *types.Response) {
 	s.hash.TestAndSet(in.View)
 	s.store.ReplaceEntries(in.StorageState)
+	s.store.SetReplicas(in.View.Members)
 }
 
 // sendHttp builds a request and issues it with a JSON body matching input.
