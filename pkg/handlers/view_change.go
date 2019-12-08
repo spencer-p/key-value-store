@@ -75,19 +75,29 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	for i := 0; i < nshards; i++ {
 		state := <-storageCh
 		for si := range state {
-			primary, err := newhash.Get(state[si].Key)
+			shardId, err := newhash.GetKeyShardId(state[si].Key)
 			if err != nil {
 				log.Printf("Failed to get primary for key %q: %v", state[si].Key, err)
 				log.Println("Ignoring key")
 				continue
 			}
+			primary := newhash.GetReplicas(shardId)[0]
 			statesByPrimary[primary] = append(statesByPrimary[primary], state[si])
 		}
 	}
 
 	// Send all the new states to primary replace
 	var wg sync.WaitGroup
-	for primary := range statesByPrimary {
+	nshards = len(in.View.Members) / in.View.ReplFactor
+	for i := 0; i < nshards; i++ {
+		// Get the primary and the state we are sending to it
+		primary := newhash.GetReplicas(i + 1)[0]
+		state, ok := statesByPrimary[primary]
+		if !ok {
+			state = []store.Entry{}
+		}
+
+		// Dispatch the view change to said primary
 		wg.Add(1)
 		go func(primary string, state []store.Entry) {
 			defer wg.Done()
@@ -106,14 +116,11 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 			}
 
 			log.Println("Primary at", primary, "accepted new state")
-		}(primary, statesByPrimary[primary])
+		}(primary, state)
 	}
 	wg.Wait()
 
-	log.Println("View change complete")
-
 	// Calculate all the shard info
-	nshards = len(in.View.Members) / in.View.ReplFactor
 	res.Shards = make([]types.Shard, nshards)
 	for i := 1; i <= nshards; i++ {
 		replicas := newhash.GetReplicas(i)
@@ -141,6 +148,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 func (s *State) primaryCollect(in types.Input, res *types.Response) {
 	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
 	clockCh := make(chan clock.VectorClock)
+	log.Println("Primary collect at shard clock", s.store.Clock().Subset(replicas))
 
 	for i := range replicas {
 		go func(addr string) {
@@ -178,7 +186,7 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 		waiting.Max(c)
 	}
 
-	log.Println("Waiting for clock", waiting)
+	log.Println("Waiting for clock", waiting.Subset(replicas))
 	err := s.store.WaitUntilCurrent(waiting)
 	if err != nil {
 		log.Println("Wait until current error", err)
@@ -187,13 +195,14 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 	}
 
 	res.StorageState = s.store.AllEntries()
-	log.Println("Up to date, sending the state...", res.StorageState)
+	log.Println("Up to date, sending the state with", len(res.StorageState), "entries")
 }
 
 func (s *State) primaryReplace(in types.Input, res *types.Response) {
 	s.hash.TestAndSet(in.View)
+	log.Println("Replacing storage with", len(in.StorageState), "entries")
 	s.store.ReplaceEntries(in.StorageState)
-	s.store.SetReplicas(in.View.Members)
+	s.store.SetReplicas(s.hash.GetReplicas(s.hash.GetShardId(s.address)))
 	var wg sync.WaitGroup
 
 	shardId := s.hash.GetShardId(s.address)
@@ -231,12 +240,14 @@ func (s *State) primaryReplace(in types.Input, res *types.Response) {
 
 func (s *State) secondaryCollect(in types.Input, res *types.Response) {
 	res.CausalCtx = s.store.Clock()
+	log.Println("Secondary collect at shard clock", res.CausalCtx.Subset(s.hash.GetReplicas(s.hash.GetShardId(s.address))))
 }
 
 func (s *State) secondaryReplace(in types.Input, res *types.Response) {
 	s.hash.TestAndSet(in.View)
+	log.Println("Replacing storage with", len(in.StorageState), "entries")
 	s.store.ReplaceEntries(in.StorageState)
-	s.store.SetReplicas(in.View.Members)
+	s.store.SetReplicas(s.hash.GetReplicas(s.hash.GetShardId(s.address)))
 }
 
 // sendHttp builds a request and issues it with a JSON body matching input.

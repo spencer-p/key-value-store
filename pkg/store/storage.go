@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/spencer-p/cse138/pkg/clock"
+	"github.com/spencer-p/cse138/pkg/uuid"
 )
 
 var (
@@ -20,6 +21,8 @@ type Entry struct {
 	Value   string            `json:"value"`
 	Deleted bool              `json:"deleted"`
 	Clock   clock.VectorClock `json:"clock"`
+	Version uuid.UUID         `json:"version"`
+	//NodeHistory map[string]bool   `json:"history"`
 }
 
 type Store struct {
@@ -30,6 +33,7 @@ type Store struct {
 	vc       clock.VectorClock
 	vcCond   *sync.Cond
 	journal  chan<- Entry
+	version  uuid.UUID
 }
 
 // New constructs an empty store that resides at the given address or unique ID.
@@ -38,12 +42,13 @@ func New(selfAddr string, replicas []string, callback chan<- Entry) *Store {
 	var mtx sync.RWMutex
 	return &Store{
 		addr:     selfAddr,
-		replicas: replicas,
+		replicas: replicas[:],
 		store:    make(map[string]Entry),
 		m:        &mtx,
 		vc:       clock.VectorClock{},
 		vcCond:   sync.NewCond(&mtx),
 		journal:  callback,
+		version:  uuid.New(selfAddr),
 	}
 }
 
@@ -62,33 +67,57 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	defer s.copyClock(&currentClock)
 
 	// Wait for a state that can accept our write
-	if err = s.WaitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
 	// Perform the write
 	s.vc.Max(tcausal)
+	s.version = s.version.Next()
 	replaced = s.commitWrite(Entry{
 		Key:     key,
 		Value:   value,
 		Deleted: false,
+		Version: s.version,
 	}, true)
 	return
 }
 
 // ImportEntry imports an existing entry from another store.
-func (s *Store) ImportEntry(e Entry) error {
+func (s *Store) ImportEntry(e Entry) (imported bool, err error) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	if err := s.waitForGossip(e.Clock); err != nil {
-		return err
+	// If we already have it, we are good
+	if existing, ok := s.store[e.Key]; ok && existing.Version.Equal(e.Version) {
+		log.Printf("Import of %q already exists on this node. ACKing", e.Key)
+		return true, nil
+	}
+
+	if err = s.waitForGossip(e.Clock); err != nil {
+		return false, err
+	}
+
+	// If we already have it, we are good
+	if existing, ok := s.store[e.Key]; ok && existing.Version.Equal(e.Version) {
+		log.Printf("Import of %q already exists on this node. ACKing", e.Key)
+		return true, nil
+	}
+
+	// if i receive gossip. from the past.  and i do not have a more recent
+	// entry for said entry.  then.  i may. commit. said entry.
+	if e.Clock.Subset(s.replicas).Compare(s.vc.Subset(s.replicas)) == clock.Less {
+		if existing, ok := s.store[e.Key]; ok {
+			if !(existing.Clock.Subset(s.replicas).Compare(s.vc.Subset(s.replicas)) != clock.Greater) {
+				return false, nil
+			}
+		}
 	}
 
 	s.vc.Max(e.Clock)
 	s.commitWrite(e, false)
 
-	return nil
+	return true, nil
 }
 
 // Delete deletes a key, returning true if it was deleted.
@@ -99,7 +128,7 @@ func (s *Store) Delete(tcausal clock.VectorClock, key string) (
 	s.m.Lock()
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
-	if err = s.WaitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -111,7 +140,8 @@ func (s *Store) Delete(tcausal clock.VectorClock, key string) (
 
 	// Perform the delete if we have the object
 	s.vc.Max(tcausal)
-	deleted = s.commitWrite(Entry{Key: key, Deleted: true}, true)
+	s.version = s.version.Next()
+	deleted = s.commitWrite(Entry{Key: key, Deleted: true, Version: s.version}, true)
 	return
 }
 
@@ -120,12 +150,16 @@ func (s *Store) commitWrite(e Entry, shouldJournal bool) (replaced bool) {
 	oldentry, exists := s.store[e.Key]
 	replaced = exists && oldentry.Deleted != true
 
-	// Update the clock in anticipation of the event
+	// Update the clock & version in anticipation of the event
 	s.vc.Increment(s.addr)
 	s.vcCond.Broadcast() // let others know this update happened once we release the lock
 
 	// Mark the clock
 	e.Clock = s.vc.Copy()
+	/*if e.NodeHistory == nil {
+		e.NodeHistory = make(map[string]bool)
+	}
+	e.NodeHistory[s.addr] = true*/
 
 	// Perform the write
 	s.store[e.Key] = e
@@ -135,10 +169,8 @@ func (s *Store) commitWrite(e Entry, shouldJournal bool) (replaced bool) {
 		log.Printf("Committed delete of %q at t=%v\n", e.Key, s.vc)
 	}
 
+	// send the update to the journal
 	if shouldJournal {
-		// Make a copy that cannot interact with the store's copy;
-		// then send it to the journal
-		e.Clock = e.Clock.Copy()
 		s.journal <- e
 	}
 
@@ -156,7 +188,7 @@ func (s *Store) Read(tcausal clock.VectorClock, key string) (
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
 
-	if err = s.WaitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -177,7 +209,7 @@ func (s *Store) NumKeys(tcausal clock.VectorClock) (
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
 
-	if err = s.WaitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -194,7 +226,7 @@ func (s *Store) NumKeys(tcausal clock.VectorClock) (
 func (s *Store) SetReplicas(nodes []string) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	s.replicas = nodes
+	s.replicas = nodes[:]
 }
 
 // BumpClockForNode informs the store that another node has processed an event of ours.
@@ -229,8 +261,10 @@ func (s *Store) ReplaceEntries(entries []Entry) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	s.store = make(map[string]Entry)
+	s.vc = clock.VectorClock{}
 	for _, e := range entries {
 		s.store[e.Key] = e
+		s.vc.Max(e.Clock)
 	}
 }
 
@@ -241,16 +275,23 @@ func (s *Store) Clock() clock.VectorClock {
 	return s.vc.Copy()
 }
 
-// WaitUntilCurrent returns a function that stalls until the waiting vector
-// clock is not causally from the future.  the write mutex must be held on the
-// store.
+// WaitUntilCurrent stalls until the waiting vector is not from the future.
 func (s *Store) WaitUntilCurrent(incoming clock.VectorClock) error {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.waitUntilCurrent(incoming)
+}
+
+// waitUntilCurrent stalls until the waiting vector clock is not causally from
+// the future.  the write mutex must be held on the store.
+func (s *Store) waitUntilCurrent(incoming clock.VectorClock) error {
 	incoming = incoming.Subset(s.replicas)
 	for {
 		// As long as this clock is not from the future, we can apply it.
 		if cmp := incoming.Compare(s.vc.Subset(s.replicas)); cmp != clock.Greater {
 			return nil
 		}
+		log.Printf("Current shard clock is %v, incoming is at %v", s.vc.Subset(s.replicas), incoming)
 		s.vcCond.Wait()
 	}
 }
@@ -258,10 +299,15 @@ func (s *Store) WaitUntilCurrent(incoming clock.VectorClock) error {
 func (s *Store) waitForGossip(incoming clock.VectorClock) error {
 	incoming = incoming.Subset(s.replicas)
 	for {
-		if canApply, _ := incoming.OneUpExcept(s.addr, s.vc.Subset(s.replicas)); canApply {
+		subs := s.vc.Subset(s.replicas)
+		if canApply, _ := incoming.OneUpExcept(s.addr, subs); canApply {
 			// One atomic update from another node.
 			return nil
+		} else if cmp := incoming.Compare(subs); cmp != clock.Greater {
+			// This gossip is not from the future! we might be able to apply it.
+			return nil
 		}
+		log.Printf("Current shard clock is %v, gossip is at %v", s.vc.Subset(s.replicas), incoming)
 		s.vcCond.Wait()
 	}
 }
