@@ -62,7 +62,7 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 	defer s.copyClock(&currentClock)
 
 	// Wait for a state that can accept our write
-	if err = s.WaitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -99,7 +99,7 @@ func (s *Store) Delete(tcausal clock.VectorClock, key string) (
 	s.m.Lock()
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
-	if err = s.WaitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -156,7 +156,7 @@ func (s *Store) Read(tcausal clock.VectorClock, key string) (
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
 
-	if err = s.WaitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -177,7 +177,7 @@ func (s *Store) NumKeys(tcausal clock.VectorClock) (
 	defer s.m.Unlock()
 	defer s.copyClock(&currentClock)
 
-	if err = s.WaitUntilCurrent(tcausal); err != nil {
+	if err = s.waitUntilCurrent(tcausal); err != nil {
 		return
 	}
 
@@ -243,10 +243,16 @@ func (s *Store) Clock() clock.VectorClock {
 	return s.vc.Copy()
 }
 
-// WaitUntilCurrent returns a function that stalls until the waiting vector
-// clock is not causally from the future.  the write mutex must be held on the
-// store.
+// WaitUntilCurrent stalls until the waiting vector is not from the future.
 func (s *Store) WaitUntilCurrent(incoming clock.VectorClock) error {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.waitUntilCurrent(incoming)
+}
+
+// waitUntilCurrent stalls until the waiting vector clock is not causally from
+// the future.  the write mutex must be held on the store.
+func (s *Store) waitUntilCurrent(incoming clock.VectorClock) error {
 	incoming = incoming.Subset(s.replicas)
 	for {
 		// As long as this clock is not from the future, we can apply it.
