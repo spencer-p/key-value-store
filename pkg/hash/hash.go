@@ -70,7 +70,7 @@ func (m *Hash) GetKeyShardId(key string) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	return shardId, nil
+	return shardId + 1, nil
 }
 
 // getKeyShard returns the shardId for a key and the hash of a key,

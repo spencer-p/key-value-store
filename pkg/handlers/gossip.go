@@ -1,16 +1,16 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/store"
-	"github.com/spencer-p/cse138/pkg/util"
+	"github.com/spencer-p/cse138/pkg/types"
 )
 
 const (
@@ -24,52 +24,105 @@ func (s *State) dispatchGossip(ctx context.Context, journal <-chan store.Entry) 
 		case <-ctx.Done():
 			return
 		case e := <-journal:
-			members := s.hash.GetReplicas(s.hash.GetShardId(s.address))
-			for i := range members {
-				if members[i] != s.address {
-					go s.sendGossip(ctx, e, members[i])
+			go func() {
+				var wg sync.WaitGroup
+				members := s.hash.GetReplicas(s.hash.GetShardId(s.address))
+				for i := range members {
+					if s.address != members[i] /*_, visitedNode := e.NodeHistory[members[i]]; !visitedNode*/ {
+						wg.Add(1)
+						go func(addr string) {
+							s.sendGossip(ctx, e, addr)
+							wg.Done()
+						}(members[i])
+					}
 				}
-			}
+				wg.Wait()
+				for i := range members {
+					if s.address != members[i] {
+						go s.sendIncrement(members[i], s.address)
+					}
+				}
+			}()
 		}
 	}
 }
 
+func (s *State) sendIncrement(node string, origin string) {
+	var res types.GossipResponse
+	_, err := s.sendHttp(http.MethodPut,
+		node, "/kv-store/gossip-increment",
+		&types.IncrementInput{Origin: origin}, &res,
+	)
+	if err != nil {
+		log.Println("Failed to send increment to", node, "because", err)
+	}
+}
+
+func (s *State) receiveIncrement(w http.ResponseWriter, r *http.Request) {
+	var res types.GossipResponse
+	defer func() {
+		if err := json.NewEncoder(w).Encode(&res); err != nil {
+			log.Println("Failed to encode gossip response:", err)
+		}
+	}()
+
+	var in types.IncrementInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		log.Println("Failed to decode increment input:", err)
+		return
+	}
+
+	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
+	for i := range replicas {
+		if replicas[i] == s.address || replicas[i] == in.Origin {
+			continue
+		}
+		s.store.BumpClockForNode(replicas[i])
+	}
+}
+
 func (s *State) receiveGossip(w http.ResponseWriter, r *http.Request) {
-	dec := json.NewDecoder(r.Body)
+	var res types.GossipResponse
+	defer func() {
+		if err := json.NewEncoder(w).Encode(&res); err != nil {
+			log.Println("Failed to encode gossip response:", err)
+		}
+	}()
+
 	var e store.Entry
-	if err := dec.Decode(&e); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
 		log.Println("Received malformed gossip:", err)
 		return
 	}
 	log.Printf("Import gossip of %q\n", e.Key)
 
-	if err := s.store.ImportEntry(e); err != nil {
+	imported, err := s.store.ImportEntry(e)
+	if err != nil {
 		log.Printf("Failed to import entry %v: %v\n", e, err)
-		http.Error(w, "cannot apply gossip", http.StatusServiceUnavailable)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
 	}
+
+	res.Imported = imported
 }
 
 func (s *State) sendGossip(ctx context.Context, e store.Entry, node string) {
 	log.Printf("Sending gossip of %v to %s\n", e, node)
-	target := util.CorrectURL(node)
 	tout := RETRY_TIMEOUT
 	for {
-		var body bytes.Buffer
-		enc := json.NewEncoder(&body)
-		if err := enc.Encode(&e); err != nil {
-			// show stopping error - this could lock the entire system
-			log.Println("Failed to encode entry:", err)
-			break
-		}
-		request, err := http.NewRequestWithContext(ctx, http.MethodPut, target+"/kv-store/gossip", &body)
-		if err != nil {
-			// also show stopping
-			log.Println("Could not create request to send entry:", err)
-			break
-		}
-		if resp, err := s.cli.Do(request); gossipSucceeded(resp, err) {
+		var res types.GossipResponse
+		resp, err := s.sendHttp(
+			http.MethodPut,
+			node, "/kv-store/gossip",
+			&e, &res,
+		)
+
+		if gossipSucceeded(resp, err) {
 			// Successfully gossipped.
-			s.store.BumpClockForNode(node)
+			if res.Imported {
+				// If they also imported it, we can count that as an event.
+				s.store.BumpClockForNode(node)
+			}
 			return
 		}
 
@@ -90,7 +143,7 @@ func gossipSucceeded(resp *http.Response, err error) bool {
 		// Returned an error that does not have to do with the context being cancelled.
 		return false
 	} else if resp.StatusCode != http.StatusOK {
-		// The target rejected it for some reason
+		// The target rejected it for some reason. This is OK
 		return false
 	}
 	// There may have been a context error, which means the gossip did not succeed.

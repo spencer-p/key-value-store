@@ -47,7 +47,7 @@ type Response struct {
 
 type Shard struct {
 	Id       int      `json:"shard-id"`
-	Replicas []string `json:"replicas"`
+	Replicas []string `json:"replicas,omitempty"`
 	KeyCount int      `json:"key-count"`
 }
 
@@ -55,8 +55,8 @@ type Shard struct {
 type Input struct {
 	Entry `json:",inline"`
 
-	// A View and Batch is only used for view change requests.
-	View         View          `json:",inline"`
+	// A View and StorageState is only used for view change requests.
+	View         `json:",inline"`
 	StorageState []store.Entry `json:"state"`
 
 	// Context the request thinks is current
@@ -67,6 +67,14 @@ type Input struct {
 type Entry struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+type GossipResponse struct {
+	Imported bool `json:"imported"`
+}
+
+type IncrementInput struct {
+	Origin string `json:"origin"`
 }
 
 // WrapHTTP wraps an method that processes Inputs and writes a Response as an http
