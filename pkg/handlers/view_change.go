@@ -88,7 +88,16 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 
 	// Send all the new states to primary replace
 	var wg sync.WaitGroup
-	for primary := range statesByPrimary {
+	nshards = len(in.View.Members) / in.View.ReplFactor
+	for i := 0; i < nshards; i++ {
+		// Get the primary and the state we are sending to it
+		primary := newhash.GetReplicas(i + 1)[0]
+		state, ok := statesByPrimary[primary]
+		if !ok {
+			state = []store.Entry{}
+		}
+
+		// Dispatch the view change to said primary
 		wg.Add(1)
 		go func(primary string, state []store.Entry) {
 			defer wg.Done()
@@ -107,12 +116,11 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 			}
 
 			log.Println("Primary at", primary, "accepted new state")
-		}(primary, statesByPrimary[primary])
+		}(primary, state)
 	}
 	wg.Wait()
 
 	// Calculate all the shard info
-	nshards = len(in.View.Members) / in.View.ReplFactor
 	res.Shards = make([]types.Shard, nshards)
 	for i := 1; i <= nshards; i++ {
 		replicas := newhash.GetReplicas(i)
