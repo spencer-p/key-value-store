@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"sync"
 
 	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
@@ -39,15 +38,10 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 func (s *State) primaryCollect(in types.Input, res *types.Response) {
 	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
 	clockCh := make(chan clock.VectorClock)
-	var wg sync.WaitGroup
 
 	log.Println("Requesting key counts from the other shards")
 	for i := range replicas {
 		go func(addr string, replicaNum int) {
-			defer wg.Done()
-			// Set the address and an invalid value before we found out the
-			// actual value
-
 			// Don't make a request if it's just ourselves
 			if addr == s.address {
 				context := s.store.Clock()
@@ -59,30 +53,24 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 			resp, err := s.sendHttp(http.MethodGet,
 				addr,
 				SECONDARY_COLLECT_ENDPOINT,
-				in.CausalCtx,
+				nil,
 				&response)
 			if err != nil {
-				clockCh <- nil
+				clockCh <- clock.VectorClock{}
 				log.Printf("Failed to send http to %q: %v\n", addr, err)
 				return
 			}
 
 			if resp.StatusCode != http.StatusOK {
-				clockCh <- nil
-				log.Printf("Shard at %q returned %d for key count\n", addr, resp.StatusCode)
-				return
-			}
-
-			if response.KeyCount == nil {
-				clockCh <- nil
-				log.Printf("Response from %q does not have a key count\n", addr)
+				clockCh <- clock.VectorClock{}
+				log.Printf("Replica at %q returned %d clock\n", addr, resp.StatusCode)
 				return
 			}
 
 			clockCh <- response.CausalCtx
 		}(replicas[i], i+1)
 	}
-	waiting := s.store.Clock()
+	waiting := clock.VectorClock{}
 	for _ = range replicas {
 		c := <-clockCh
 		waiting.Max(c)
@@ -95,8 +83,7 @@ func (s *State) primaryCollect(in types.Input, res *types.Response) {
 		return
 	}
 
-	store := s.store.AllEntries()
-	res.StorageState = store
+	res.StorageState = s.store.AllEntries()
 }
 
 func (s *State) primaryReplace(in types.Input, res *types.Response) {
