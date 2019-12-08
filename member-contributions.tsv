@@ -1,4 +1,4 @@
-vramared	Worked on forwarding
-haskari	Worked on forwarding
-wasper	Added the key count handler
-spjpeter	I wrote the view change logic and tests.
+vramared	TODO
+haskari	TODO
+wasper	TODO
+spjpeter	Worked on causal delivery for insert, delete, and get
