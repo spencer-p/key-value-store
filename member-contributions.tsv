@@ -1,4 +1,4 @@
 vramared	TODO
 haskari	Worked on shards handler and gossip
-wasper	TODO
+wasper	Worked on store getting and replacing all entries
 spjpeter	Worked on causal delivery for insert, delete, and get
