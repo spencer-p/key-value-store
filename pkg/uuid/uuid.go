@@ -41,6 +41,10 @@ func (u UUID) Greater(v UUID) bool {
 	return u.Seq > v.Seq || u.IP > v.IP || u.Port > v.Port
 }
 
+func (u UUID) Equal(v UUID) bool {
+	return u.Seq == v.Seq && u.IP == v.IP && u.Port == v.Port
+}
+
 func Ptr(u UUID) *UUID {
 	return &u
 }

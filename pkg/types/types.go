@@ -69,6 +69,10 @@ type Entry struct {
 	Value string `json:"value"`
 }
 
+type GossipResponse struct {
+	Imported bool `json:"imported"`
+}
+
 // WrapHTTP wraps an method that processes Inputs and writes a Response as an http
 // handler.
 func WrapHTTP(next func(Input, *Response)) http.HandlerFunc {

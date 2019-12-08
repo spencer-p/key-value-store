@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/spencer-p/cse138/pkg/clock"
+	"github.com/spencer-p/cse138/pkg/uuid"
 )
 
 var (
@@ -20,6 +21,7 @@ type Entry struct {
 	Value   string            `json:"value"`
 	Deleted bool              `json:"deleted"`
 	Clock   clock.VectorClock `json:"clock"`
+	Version uuid.UUID         `json:"version"`
 }
 
 type Store struct {
@@ -30,6 +32,7 @@ type Store struct {
 	vc       clock.VectorClock
 	vcCond   *sync.Cond
 	journal  chan<- Entry
+	version  uuid.UUID
 }
 
 // New constructs an empty store that resides at the given address or unique ID.
@@ -44,6 +47,7 @@ func New(selfAddr string, replicas []string, callback chan<- Entry) *Store {
 		vc:       clock.VectorClock{},
 		vcCond:   sync.NewCond(&mtx),
 		journal:  callback,
+		version:  uuid.New(selfAddr),
 	}
 }
 
@@ -68,21 +72,28 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 
 	// Perform the write
 	s.vc.Max(tcausal)
+	s.version = s.version.Next()
 	replaced = s.commitWrite(Entry{
 		Key:     key,
 		Value:   value,
 		Deleted: false,
-	}, true)
+		Version: s.version,
+	})
 	return
 }
 
 // ImportEntry imports an existing entry from another store.
-func (s *Store) ImportEntry(e Entry) error {
+func (s *Store) ImportEntry(e Entry) (imported bool, err error) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	if err := s.waitForGossip(e.Clock); err != nil {
-		return err
+	// If we already have it, we are good
+	if existing, ok := s.store[e.Key]; ok && existing.Version.Equal(e.Version) {
+		return false, nil
+	}
+
+	if err = s.waitForGossip(e.Clock); err != nil {
+		return false, err
 	}
 
 	// if i receive gossip. from the past.  and i do not have a more recent
@@ -90,15 +101,15 @@ func (s *Store) ImportEntry(e Entry) error {
 	if e.Clock.Subset(s.replicas).Compare(s.vc.Subset(s.replicas)) == clock.Less {
 		if existing, ok := s.store[e.Key]; ok {
 			if !(existing.Clock.Subset(s.replicas).Compare(s.vc.Subset(s.replicas)) != clock.Greater) {
-				return nil
+				return false, nil
 			}
 		}
 	}
 
 	s.vc.Max(e.Clock)
-	s.commitWrite(e, false)
+	s.commitWrite(e)
 
-	return nil
+	return true, nil
 }
 
 // Delete deletes a key, returning true if it was deleted.
@@ -121,20 +132,21 @@ func (s *Store) Delete(tcausal clock.VectorClock, key string) (
 
 	// Perform the delete if we have the object
 	s.vc.Max(tcausal)
-	deleted = s.commitWrite(Entry{Key: key, Deleted: true}, true)
+	s.version = s.version.Next()
+	deleted = s.commitWrite(Entry{Key: key, Deleted: true, Version: s.version})
 	return
 }
 
-func (s *Store) commitWrite(e Entry, shouldJournal bool) (replaced bool) {
+func (s *Store) commitWrite(e Entry) (replaced bool) {
 	// Check if the entry previously existed
 	oldentry, exists := s.store[e.Key]
 	replaced = exists && oldentry.Deleted != true
 
-	// Update the clock in anticipation of the event
+	// Update the clock & version in anticipation of the event
 	s.vc.Increment(s.addr)
 	s.vcCond.Broadcast() // let others know this update happened once we release the lock
 
-	// Mark the clock
+	// Mark the clock & version
 	e.Clock = s.vc.Copy()
 
 	// Perform the write
@@ -145,12 +157,8 @@ func (s *Store) commitWrite(e Entry, shouldJournal bool) (replaced bool) {
 		log.Printf("Committed delete of %q at t=%v\n", e.Key, s.vc)
 	}
 
-	if shouldJournal {
-		// Make a copy that cannot interact with the store's copy;
-		// then send it to the journal
-		e.Clock = e.Clock.Copy()
-		s.journal <- e
-	}
+	// send the update to the journal
+	s.journal <- e
 
 	return replaced
 }

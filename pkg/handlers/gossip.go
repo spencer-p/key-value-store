@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,7 +9,7 @@ import (
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/store"
-	"github.com/spencer-p/cse138/pkg/util"
+	"github.com/spencer-p/cse138/pkg/types"
 )
 
 const (
@@ -43,33 +42,36 @@ func (s *State) receiveGossip(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Import gossip of %q\n", e.Key)
 
-	if err := s.store.ImportEntry(e); err != nil {
+	imported, err := s.store.ImportEntry(e)
+	if err != nil {
 		log.Printf("Failed to import entry %v: %v\n", e, err)
 		http.Error(w, "cannot apply gossip", http.StatusServiceUnavailable)
+	}
+
+	var res types.GossipResponse
+	res.Imported = imported
+	if err := json.NewEncoder(w).Encode(&res); err != nil {
+		log.Println("Failed to encode gossip response:", err)
 	}
 }
 
 func (s *State) sendGossip(ctx context.Context, e store.Entry, node string) {
 	log.Printf("Sending gossip of %v to %s\n", e, node)
-	target := util.CorrectURL(node)
 	tout := RETRY_TIMEOUT
 	for {
-		var body bytes.Buffer
-		enc := json.NewEncoder(&body)
-		if err := enc.Encode(&e); err != nil {
-			// show stopping error - this could lock the entire system
-			log.Println("Failed to encode entry:", err)
-			break
-		}
-		request, err := http.NewRequestWithContext(ctx, http.MethodPut, target+"/kv-store/gossip", &body)
-		if err != nil {
-			// also show stopping
-			log.Println("Could not create request to send entry:", err)
-			break
-		}
-		if resp, err := s.cli.Do(request); gossipSucceeded(resp, err) {
+		var res types.GossipResponse
+		resp, err := s.sendHttp(
+			http.MethodPut,
+			node, "/kv-store/gossip",
+			&e, &res,
+		)
+
+		if gossipSucceeded(resp, err) {
 			// Successfully gossipped.
-			s.store.BumpClockForNode(node)
+			if res.Imported {
+				// If they also imported it, we can count that as an event.
+				s.store.BumpClockForNode(node)
+			}
 			return
 		}
 
