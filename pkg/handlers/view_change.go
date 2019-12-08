@@ -3,12 +3,14 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"path"
 	"sync"
 
 	"github.com/spencer-p/cse138/pkg/clock"
+	"github.com/spencer-p/cse138/pkg/hash"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/store"
 	"github.com/spencer-p/cse138/pkg/types"
@@ -16,8 +18,12 @@ import (
 )
 
 const (
-	VIEWCHANGE_ENDPOINT = "/kv-store/view-change"
-	KEYCOUNT_ENDPOINT   = "/kv-store/key-count"
+	PRIMARY_COLLECT_ENDPOINT   = "/kv-store/view-change/primary-collect"
+	SECONDARY_COLLECT_ENDPOINT = "/kv-store/view-change/secondary-collect"
+	PRIMARY_REPLACE_ENDPOINT   = "/kv-store/view-change/primary-replace"
+	SECONDARY_REPLACE_ENDPOINT = "/kv-store/view-change/secondary-replace"
+	VIEWCHANGE_ENDPOINT        = "/kv-store/view-change"
+	KEYCOUNT_ENDPOINT          = "/kv-store/key-count"
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
@@ -27,213 +33,249 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 		return
 	}
 
-	log.Printf("Received view change %#v\n", in.View)
+	log.Printf("Received view change %#v, acting as coordinator\n", in.View)
+	oldview := s.hash.GetView()
+	nshards := len(oldview.Members) / oldview.ReplFactor
+	storageCh := make(chan []store.Entry)
 
-	viewIsNew := s.hash.TestAndSet(in.View)
-	if viewIsNew {
-		log.Println("This view is new information")
-		// We just set a new view. We have keys that need to move to other
-		// nodes.
-		batches := s.getBatches()
-		offloaded, err := s.dispatchBatches(in.View, batches)
-		if err != nil {
-			log.Println("Failed to offload some keys:", err)
-		}
-		s.deleteEntries(offloaded)
+	// Retrieve a full storage object from each shard
+	for i := 0; i < nshards; i++ {
+		go func(replicas []string, shardId int) {
+			// Try to reach a primary node on each shard in order
+			var response types.Response
+			for _, primary := range replicas {
+				log.Println("Attempting to fetch shard", shardId, "state from", primary)
+				httpResp, err := s.sendHttp(
+					http.MethodGet,
+					primary, PRIMARY_COLLECT_ENDPOINT,
+					&in, &response)
+				if err != nil {
+					log.Printf("Failed to send collect from primary %q for shard %d: %v\n", primary, shardId, err)
+					continue
+				} else if httpResp.StatusCode != http.StatusOK {
+					log.Printf("Failed to collect from primary %q for shard %d: %v\n", primary, shardId, err)
+					continue
+				}
+
+				// The primary we tried returned a storage object.
+				// Pass on the state and stop querying this shard.
+				log.Println("Received state for shard", shardId)
+				storageCh <- response.StorageState
+				return
+			}
+
+			log.Println("All replicas in shard", shardId, "were unreachable. Ignoring shard.")
+			storageCh <- []store.Entry{}
+		}(oldview.Members[i*oldview.ReplFactor:(i+1)*oldview.ReplFactor], i+1)
 	}
 
-	// Always apply the diff - we will get many of these
-	log.Println("Applying a batch of", len(in.Batch), "keys")
-	s.applyBatch(in.Batch)
+	// Accumulate all the states and remap them onto each shard
+	statesByPrimary := make(map[string][]store.Entry)
+	newhash := hash.New(in.View)
+	for i := 0; i < nshards; i++ {
+		state := <-storageCh
+		for si := range state {
+			primary, err := newhash.Get(state[si].Key)
+			if err != nil {
+				log.Printf("Failed to get primary for key %q: %v", state[si].Key, err)
+				log.Println("Ignoring key")
+				continue
+			}
+			statesByPrimary[primary] = append(statesByPrimary[primary], state[si])
+		}
+	}
 
-	if !(!in.Internal && viewIsNew) {
-		// We are not the first node to receive the view change - no further
-		// action is required.
-		res.Message = msg.PartialViewChangeSuccess
+	// Send all the new states to primary replace
+	var wg sync.WaitGroup
+	for primary := range statesByPrimary {
+		wg.Add(1)
+		go func(primary string, state []store.Entry) {
+			defer wg.Done()
+			log.Println("Dispatching a state to new primary", primary)
+			var response types.Response
+			httpResp, err := s.sendHttp(
+				http.MethodPut,
+				primary, PRIMARY_REPLACE_ENDPOINT,
+				&types.Input{View: in.View, StorageState: state}, &response)
+			if err != nil {
+				log.Printf("Failed to send state to primary %q: %v\n", primary, err)
+				return
+			} else if httpResp.StatusCode != http.StatusOK {
+				log.Printf("Primary %q did not accept state: status code %d\n", primary, httpResp.StatusCode)
+				return
+			}
+
+			log.Println("Primary at", primary, "accepted new state")
+		}(primary, statesByPrimary[primary])
+	}
+	wg.Wait()
+
+	log.Println("View change complete")
+
+	// Calculate all the shard info
+	nshards = len(in.View.Members) / in.View.ReplFactor
+	res.Shards = make([]types.Shard, nshards)
+	for i := 1; i <= nshards; i++ {
+		replicas := newhash.GetReplicas(i)
+		res.Shards[i-1] = types.Shard{
+			Id:       i,
+			Replicas: replicas,
+			KeyCount: func(entries []store.Entry) (count int) {
+				// Key count is the number of not deleted keys
+				for i := range entries {
+					if !entries[i].Deleted {
+						count += 1
+					}
+				}
+				return
+			}(statesByPrimary[replicas[0]]),
+		}
+	}
+
+	// Set the final info!
+	res.Message = msg.ViewChangeSuccess
+	res.CausalCtx = s.store.Clock() // This is silly. This particular node's clock might be meaningless
+}
+
+// return our func (s *State) primaryCollect(in types.Input, res *types.Response) types.Response {
+func (s *State) primaryCollect(in types.Input, res *types.Response) {
+	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
+	clockCh := make(chan clock.VectorClock)
+
+	for i := range replicas {
+		go func(addr string) {
+			// Don't make a request if it's just ourselves
+			if addr == s.address {
+				context := s.store.Clock()
+				clockCh <- context
+				return
+			}
+
+			var response types.Response
+			resp, err := s.sendHttp(http.MethodGet,
+				addr,
+				SECONDARY_COLLECT_ENDPOINT,
+				nil,
+				&response)
+			if err != nil {
+				clockCh <- clock.VectorClock{}
+				log.Printf("Failed to send http to %q: %v\n", addr, err)
+				return
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				clockCh <- clock.VectorClock{}
+				log.Printf("Replica at %q returned %d clock\n", addr, resp.StatusCode)
+				return
+			}
+
+			clockCh <- response.CausalCtx
+		}(replicas[i])
+	}
+	waiting := clock.VectorClock{}
+	for _ = range replicas {
+		c := <-clockCh
+		waiting.Max(c)
+	}
+
+	log.Println("Waiting for clock", waiting)
+	err := s.store.WaitUntilCurrent(waiting)
+	if err != nil {
+		log.Println("Wait until current error", err)
+		res.Status = http.StatusServiceUnavailable
 		return
 	}
 
-	// We're the node that initiated the view change -- return a meaningful
-	// response to the oracle
-	log.Println("Cluster's view change is committed to all nodes")
-	res.Message = msg.ViewChangeSuccess
-	res.Shards = s.getKeyCounts(in.View.Members) // TODO use the hash object
+	res.StorageState = s.store.AllEntries()
+	log.Println("Up to date, sending the state...", res.StorageState)
 }
 
-// getBatches retrieves all batches of keys that should be on other nodes and
-// returns them.
-func (s *State) getBatches() map[string][]types.Entry {
-	batches := make(map[string][]types.Entry)
-	s.store.For(func(key string, e store.Entry) store.IterAction {
-		target, err := s.hash.Get(key)
-		value := e.Value
-		if err != nil {
-			log.Printf("Invalid key %q=%q: %v. Dropping.\n", key, value, err)
-		}
-
-		if target != s.address {
-			batches[target] = append(batches[target], types.Entry{
-				Key:   key,
-				Value: value,
-			})
-		}
-		return store.CONTINUE
-	})
-	return batches
-}
-
-// deleteEntries removes the given batches from our own state.
-func (s *State) deleteEntries(entries []types.Entry) {
-	log.Println("Deleting", len(entries), "offloaded keys")
-	for _ = range entries {
-		// TODO Force these deletes somehow (or don't?)
-		//s.store.Delete(clock.VectorClock{}, entries[i].Key)
-	}
-}
-
-// dispatchBatches forwards a view change to all other nodes in the view.
-// A list of batches that were successfully dispatched is returned with an error.
-func (s *State) dispatchBatches(view types.View, batches map[string][]types.Entry) ([]types.Entry, error) {
-	var wg sync.WaitGroup
-	var finalerr error
-	deletech := make(chan []types.Entry)
-	donech := make(chan struct{})
-
-	// Spin up a goroutine to send each batch to each node
-	for i := range view.Members {
-		wg.Add(1)
-		go func(addr string, batch []types.Entry) {
-			defer wg.Done()
-			log.Printf("Sending view/batch with %d keys to %q\n", len(batch), addr)
-			err := s.sendBatch(addr, types.Input{
-				View:  view,
-				Batch: batch,
-			})
-			if err != nil {
-				log.Printf("Failed to deliver batch to %q: %v\n", addr, err)
-				finalerr = err
-				return
-			}
-			deletech <- batch
-		}(view.Members[i], batches[view.Members[i]])
-	}
-
-	// Wait for all the goroutines to terminate.
-	// When the waitgroup is done, everything in the deletech has been
-	// processed. We can then notify ourselves via donech and close both
-	// channels.
-	go func() {
-		wg.Wait()
-		donech <- struct{}{}
-		close(donech)
-		close(deletech)
-	}()
-
-	// Accumulate all the keys that have been successfully offloaded and return
-	// them with a potential error when done
-	var offloaded []types.Entry
-	for {
-		select {
-		case <-donech:
-			return offloaded, finalerr
-		case todelete := <-deletech:
-			log.Println(len(todelete), "keys offloaded")
-			offloaded = append(offloaded, todelete...)
-		}
-	}
-}
-
-func (s *State) applyBatch(batch []types.Entry) {
-	for _, _ = range batch {
-		// TODO these need to be stored better
-		//s.store.Set(e.Key, e.Value)
-	}
-}
-
-// sendBatch sends a types.Input to the target node's address.
-func (s *State) sendBatch(target string, payload types.Input) error {
-	payload.Internal = true
-
-	// Encode the payload to a buffer
-	var body bytes.Buffer
-	enc := json.NewEncoder(&body)
-	err := enc.Encode(payload)
-	if err != nil {
-		return fmt.Errorf("failed to encode payload: %w", err)
-	}
-
-	// Build a request with our payload to the target address
-	target = util.CorrectURL(target + VIEWCHANGE_ENDPOINT)
-	req, err := http.NewRequest(http.MethodPut, target, &body)
-	if err != nil {
-		return fmt.Errorf("failed to build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send the request & return a useful result
-	resp, err := s.cli.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to do view change request: %w", err)
-	}
-
-	// TODO Parse the response
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("non-200 status code: %d", resp.StatusCode)
-	}
-	return nil
-}
-
-// getKeyCounts retrieves information about the shards for the given view.
-func (s *State) getKeyCounts(view []string) []types.Shard {
-	shards := make([]types.Shard, len(view))
+func (s *State) primaryReplace(in types.Input, res *types.Response) {
+	s.hash.TestAndSet(in.View)
+	s.store.ReplaceEntries(in.StorageState)
+	s.store.SetReplicas(in.View.Members)
 	var wg sync.WaitGroup
 
-	log.Println("Requesting key counts from the other nodes")
-	for i := range view {
+	shardId := s.hash.GetShardId(s.address)
+	log.Printf("Sending replacement batch to all replicas in shard %d\n", shardId)
+	replicas := s.hash.GetReplicas(shardId)
+	for _, replicaAddr := range replicas {
+		if replicaAddr == s.address {
+			continue
+		}
+
 		wg.Add(1)
-		go func(addr string, shard *types.Shard) {
+		go func(addr string) {
 			defer wg.Done()
-
-			// Set the address and an invalid value before we found out the
-			// actual value
-			shard.Address = addr
-			shard.KeyCount = -1
-
-			// Don't make a request if it's just ourselves
-			if addr == s.address {
-				// TODO do something smarter
-				_, shard.KeyCount, _ = s.store.NumKeys(clock.VectorClock{})
-				return
-			}
-
-			// Dispatch a get request to the other node
-			resp, err := s.cli.Get(util.CorrectURL(addr) + KEYCOUNT_ENDPOINT)
-			if err != nil {
-				log.Printf("Failed to send a req to %q: %v\n", addr, err)
-				return
-			}
-			if resp.StatusCode != http.StatusOK {
-				log.Printf("Node at %q returned %d for key count\n", addr, resp.StatusCode)
-				return
-			}
-
-			// Parse the response
 			var response types.Response
-			if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
-				log.Printf("Failed to parse response from %q: %v\n", addr, err)
+			resp, err := s.sendHttp(http.MethodPut,
+				addr,
+				SECONDARY_REPLACE_ENDPOINT,
+				in,
+				&response)
+			if err != nil {
+				log.Printf("Failed to send http to %q: %v\n", addr, err)
 				return
 			}
 
-			if response.KeyCount == nil {
-				log.Printf("Response from %q does not have a key count\n", addr)
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Replica at %q failed to replace storage: %d", addr, resp.StatusCode)
 				return
 			}
-
-			// We actually got a response!
-			shard.KeyCount = *response.KeyCount
-		}(view[i], &shards[i])
+		}(replicaAddr)
 	}
 
 	wg.Wait()
-	return shards
+	return
+}
+
+func (s *State) secondaryCollect(in types.Input, res *types.Response) {
+	res.CausalCtx = s.store.Clock()
+}
+
+func (s *State) secondaryReplace(in types.Input, res *types.Response) {
+	s.hash.TestAndSet(in.View)
+	s.store.ReplaceEntries(in.StorageState)
+	s.store.SetReplicas(in.View.Members)
+}
+
+// sendHttp builds a request and issues it with a JSON body matching input.
+// The response is unmarshalled into response and the http response is returned (or an error).
+func (s *State) sendHttp(method, address, endpoint string, input, response interface{}) (*http.Response, error) {
+	// Encode the input body
+	var body bytes.Buffer
+	if err := json.NewEncoder(&body).Encode(input); err != nil {
+		return nil, err
+	}
+
+	// Build the target URL
+	target, err := url.Parse(util.CorrectURL(address))
+	if err != nil {
+		log.Printf("Bad forwarding address %q: %v\n", address, err)
+		return nil, err
+	}
+	target.Path = path.Join(target.Path, endpoint)
+
+	// Build request
+	request, err := http.NewRequest(method, target.String(), &body)
+	if err != nil {
+		log.Printf("Failed to build request to %q: %v\n", address, err)
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	resp, err := s.cli.Do(request)
+	if err != nil {
+		log.Printf("Failed to send request to %q: %v\n", address, err)
+		return nil, err
+	}
+
+	// Parse the response
+	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Printf("Failed to parse response from %q: %v\n", address, err)
+		return nil, err
+	}
+
+	return resp, nil
 }

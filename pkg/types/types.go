@@ -9,6 +9,7 @@ import (
 
 	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
+	"github.com/spencer-p/cse138/pkg/store"
 )
 
 type View struct {
@@ -33,17 +34,21 @@ type Response struct {
 	KeyCount *int     `json:"key-count,omitempty"`
 	ShardId  *int     `json:"shard-id,omitempty"`
 	Replicas []string `json:"replicas,omitempty"`
+
 	// Potential forwarding metadata
 	Address string `json:"address,omitempty"`
 
 	// Context for causal consistency
 	CausalCtx clock.VectorClock `json:"causal-context"`
+
+	// Internal view change data
+	StorageState []store.Entry `json:"state,omitempty"`
 }
 
 type Shard struct {
-	Id       *int   `json:"shard-id,omitempty"`
-	Address  string `json:"address,omitempty"`
-	KeyCount int    `json:"key-count"`
+	Id       int      `json:"shard-id"`
+	Replicas []string `json:"replicas"`
+	KeyCount int      `json:"key-count"`
 }
 
 // Input stores arguments to each api request
@@ -51,14 +56,11 @@ type Input struct {
 	Entry `json:",inline"`
 
 	// A View and Batch is only used for view change requests.
-	View  View    `json:",inline"`
-	Batch []Entry `json:"diff"`
+	View         View          `json:",inline"`
+	StorageState []store.Entry `json:"state"`
 
 	// Context the request thinks is current
 	CausalCtx clock.VectorClock `json:"causal-context"`
-
-	// Marked true only for internal communication.
-	Internal bool `json:"internal,omitempty"`
 }
 
 // An Entry is a key value pair.

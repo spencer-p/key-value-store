@@ -141,7 +141,6 @@ func NewState(ctx context.Context, addr string, view types.View) *State {
 
 func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/gossip", s.receiveGossip).Methods(http.MethodPut)
-	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
 	r.HandleFunc("/kv-store/shards", types.WrapHTTP(s.shardsHandler)).Methods(http.MethodGet)
@@ -154,4 +153,9 @@ func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.deleteHandler))).Methods(http.MethodDelete)
 	r.HandleFunc("/kv-store/keys/{key:.*}", types.WrapHTTP(types.ValidateKey(s.getHandler))).Methods(http.MethodGet)
 
+	r.HandleFunc("/kv-store/view-change", types.WrapHTTP(s.viewChange)).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/view-change/primary-collect", types.WrapHTTP(s.primaryCollect))
+	r.HandleFunc("/kv-store/view-change/primary-replace", types.WrapHTTP(s.primaryReplace))
+	r.HandleFunc("/kv-store/view-change/secondary-collect", types.WrapHTTP(s.secondaryCollect))
+	r.HandleFunc("/kv-store/view-change/secondary-replace", types.WrapHTTP(s.secondaryReplace))
 }
