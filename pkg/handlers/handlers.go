@@ -141,6 +141,7 @@ func NewState(ctx context.Context, addr string, view types.View) *State {
 
 func (s *State) Route(r *mux.Router) {
 	r.HandleFunc("/kv-store/gossip", s.receiveGossip).Methods(http.MethodPut)
+	r.HandleFunc("/kv-store/gossip-increment", s.receiveIncrement)
 	r.HandleFunc("/kv-store/key-count", types.WrapHTTP(s.countHandler)).Methods(http.MethodGet)
 
 	r.HandleFunc("/kv-store/shards", types.WrapHTTP(s.shardsHandler)).Methods(http.MethodGet)

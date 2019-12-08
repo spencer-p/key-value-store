@@ -17,12 +17,12 @@ var (
 // Entry describes a full data point in the store.
 // The value is required. Other fields are semi-optional depending on the context.
 type Entry struct {
-	Key         string            `json:"key"`
-	Value       string            `json:"value"`
-	Deleted     bool              `json:"deleted"`
-	Clock       clock.VectorClock `json:"clock"`
-	Version     uuid.UUID         `json:"version"`
-	NodeHistory map[string]bool   `json:"history"`
+	Key     string            `json:"key"`
+	Value   string            `json:"value"`
+	Deleted bool              `json:"deleted"`
+	Clock   clock.VectorClock `json:"clock"`
+	Version uuid.UUID         `json:"version"`
+	//NodeHistory map[string]bool   `json:"history"`
 }
 
 type Store struct {
@@ -79,7 +79,7 @@ func (s *Store) Write(tcausal clock.VectorClock, key, value string) (
 		Value:   value,
 		Deleted: false,
 		Version: s.version,
-	})
+	}, true)
 	return
 }
 
@@ -115,7 +115,7 @@ func (s *Store) ImportEntry(e Entry) (imported bool, err error) {
 	}
 
 	s.vc.Max(e.Clock)
-	s.commitWrite(e)
+	s.commitWrite(e, false)
 
 	return true, nil
 }
@@ -141,11 +141,11 @@ func (s *Store) Delete(tcausal clock.VectorClock, key string) (
 	// Perform the delete if we have the object
 	s.vc.Max(tcausal)
 	s.version = s.version.Next()
-	deleted = s.commitWrite(Entry{Key: key, Deleted: true, Version: s.version})
+	deleted = s.commitWrite(Entry{Key: key, Deleted: true, Version: s.version}, true)
 	return
 }
 
-func (s *Store) commitWrite(e Entry) (replaced bool) {
+func (s *Store) commitWrite(e Entry, shouldJournal bool) (replaced bool) {
 	// Check if the entry previously existed
 	oldentry, exists := s.store[e.Key]
 	replaced = exists && oldentry.Deleted != true
@@ -156,10 +156,10 @@ func (s *Store) commitWrite(e Entry) (replaced bool) {
 
 	// Mark the clock
 	e.Clock = s.vc.Copy()
-	if e.NodeHistory == nil {
+	/*if e.NodeHistory == nil {
 		e.NodeHistory = make(map[string]bool)
 	}
-	e.NodeHistory[s.addr] = true
+	e.NodeHistory[s.addr] = true*/
 
 	// Perform the write
 	s.store[e.Key] = e
@@ -170,7 +170,9 @@ func (s *Store) commitWrite(e Entry) (replaced bool) {
 	}
 
 	// send the update to the journal
-	s.journal <- e
+	if shouldJournal {
+		s.journal <- e
+	}
 
 	return replaced
 }

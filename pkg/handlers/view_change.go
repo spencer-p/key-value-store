@@ -240,7 +240,7 @@ func (s *State) primaryReplace(in types.Input, res *types.Response) {
 
 func (s *State) secondaryCollect(in types.Input, res *types.Response) {
 	res.CausalCtx = s.store.Clock()
-	log.Println("Primary collect at shard clock", res.CausalCtx.Subset(s.hash.GetReplicas(s.hash.GetShardId(s.address))))
+	log.Println("Secondary collect at shard clock", res.CausalCtx.Subset(s.hash.GetReplicas(s.hash.GetShardId(s.address))))
 }
 
 func (s *State) secondaryReplace(in types.Input, res *types.Response) {

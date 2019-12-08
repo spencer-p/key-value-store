@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/spencer-p/cse138/pkg/store"
@@ -23,13 +24,60 @@ func (s *State) dispatchGossip(ctx context.Context, journal <-chan store.Entry) 
 		case <-ctx.Done():
 			return
 		case e := <-journal:
-			members := s.hash.GetReplicas(s.hash.GetShardId(s.address))
-			for i := range members {
-				if _, visitedNode := e.NodeHistory[members[i]]; !visitedNode {
-					go s.sendGossip(ctx, e, members[i])
+			go func() {
+				var wg sync.WaitGroup
+				members := s.hash.GetReplicas(s.hash.GetShardId(s.address))
+				for i := range members {
+					if s.address != members[i] /*_, visitedNode := e.NodeHistory[members[i]]; !visitedNode*/ {
+						wg.Add(1)
+						go func(addr string) {
+							s.sendGossip(ctx, e, addr)
+							wg.Done()
+						}(members[i])
+					}
 				}
-			}
+				wg.Wait()
+				for i := range members {
+					if s.address != members[i] {
+						go s.sendIncrement(members[i], s.address)
+					}
+				}
+			}()
 		}
+	}
+}
+
+func (s *State) sendIncrement(node string, origin string) {
+	var res types.GossipResponse
+	_, err := s.sendHttp(http.MethodPut,
+		node, "/kv-store/gossip-increment",
+		&types.IncrementInput{Origin: origin}, &res,
+	)
+	if err != nil {
+		log.Println("Failed to send increment to", node, "because", err)
+	}
+}
+
+func (s *State) receiveIncrement(w http.ResponseWriter, r *http.Request) {
+	var res types.GossipResponse
+	defer func() {
+		if err := json.NewEncoder(w).Encode(&res); err != nil {
+			log.Println("Failed to encode gossip response:", err)
+		}
+	}()
+
+	var in types.IncrementInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		log.Println("Failed to decode increment input:", err)
+		return
+	}
+
+	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
+	for i := range replicas {
+		if replicas[i] == s.address || replicas[i] == in.Origin {
+			continue
+		}
+		s.store.BumpClockForNode(replicas[i])
 	}
 }
 
