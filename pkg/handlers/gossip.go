@@ -90,7 +90,7 @@ func gossipSucceeded(resp *http.Response, err error) bool {
 		// Returned an error that does not have to do with the context being cancelled.
 		return false
 	} else if resp.StatusCode != http.StatusOK {
-		// The target rejected it for some reason
+		// The target rejected it for some reason. This is OK
 		return false
 	}
 	// There may have been a context error, which means the gossip did not succeed.

@@ -85,6 +85,16 @@ func (s *Store) ImportEntry(e Entry) error {
 		return err
 	}
 
+	// if i receive gossip. from the past.  and i do not have a more recent
+	// entry for said entry.  then.  i may. commit. said entry.
+	if e.Clock.Subset(s.replicas).Compare(s.vc.Subset(s.replicas)) == clock.Less {
+		if existing, ok := s.store[e.Key]; ok {
+			if !(existing.Clock.Subset(s.replicas).Compare(s.vc.Subset(s.replicas)) != clock.Greater) {
+				return nil
+			}
+		}
+	}
+
 	s.vc.Max(e.Clock)
 	s.commitWrite(e, false)
 
@@ -266,11 +276,15 @@ func (s *Store) waitUntilCurrent(incoming clock.VectorClock) error {
 func (s *Store) waitForGossip(incoming clock.VectorClock) error {
 	incoming = incoming.Subset(s.replicas)
 	for {
-		if canApply, _ := incoming.OneUpExcept(s.addr, s.vc.Subset(s.replicas)); canApply {
+		subs := s.vc.Subset(s.replicas)
+		if canApply, _ := incoming.OneUpExcept(s.addr, subs); canApply {
 			// One atomic update from another node.
 			return nil
+		} else if cmp := incoming.Compare(subs); cmp != clock.Greater {
+			// This gossip is not from the future! we might be able to apply it.
+			return nil
 		}
-		log.Printf("Current repl. clock is %v, gossip is at %v", s.vc.Subset(s.replicas), incoming)
+		log.Printf("Current shard clock is %v, gossip is at %v", s.vc.Subset(s.replicas), incoming)
 		s.vcCond.Wait()
 	}
 }
