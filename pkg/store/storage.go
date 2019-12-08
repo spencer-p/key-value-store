@@ -269,9 +269,3 @@ func (s *Store) waitForGossip(incoming clock.VectorClock) error {
 func (s *Store) copyClock(c *clock.VectorClock) {
 	*c = s.vc.Copy()
 }
-
-func (s *Store) GetReplicas() []string {
-	s.m.Lock()
-	defer s.m.Unlock()
-	return s.replicas
-}
