@@ -38,7 +38,7 @@ func New(selfAddr string, replicas []string, callback chan<- Entry) *Store {
 	var mtx sync.RWMutex
 	return &Store{
 		addr:     selfAddr,
-		replicas: replicas,
+		replicas: replicas[:],
 		store:    make(map[string]Entry),
 		m:        &mtx,
 		vc:       clock.VectorClock{},
@@ -194,7 +194,7 @@ func (s *Store) NumKeys(tcausal clock.VectorClock) (
 func (s *Store) SetReplicas(nodes []string) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	s.replicas = nodes
+	s.replicas = nodes[:]
 }
 
 // BumpClockForNode informs the store that another node has processed an event of ours.
@@ -270,6 +270,7 @@ func (s *Store) waitForGossip(incoming clock.VectorClock) error {
 			// One atomic update from another node.
 			return nil
 		}
+		log.Printf("Current repl. clock is %v, gossip is at %v", s.vc.Subset(s.replicas), incoming)
 		s.vcCond.Wait()
 	}
 }
