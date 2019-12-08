@@ -137,7 +137,6 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	res.CausalCtx = s.store.Clock() // This is silly. This particular node's clock might be meaningless
 }
 
-// TODO collect from secondaries
 // return our func (s *State) primaryCollect(in types.Input, res *types.Response) types.Response {
 func (s *State) primaryCollect(in types.Input, res *types.Response) {
 	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
