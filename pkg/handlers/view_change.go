@@ -119,7 +119,15 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 		res.Shards[i-1] = types.Shard{
 			Id:       i,
 			Replicas: replicas,
-			KeyCount: len(statesByPrimary[replicas[0]]),
+			KeyCount: func(entries []store.Entry) (count int) {
+				// Key count is the number of not deleted keys
+				for i := range entries {
+					if !entries[i].Deleted {
+						count += 1
+					}
+				}
+				return
+			}(statesByPrimary[replicas[0]]),
 		}
 	}
 
