@@ -25,7 +25,7 @@ func (s *State) dispatchGossip(ctx context.Context, journal <-chan store.Entry) 
 		case e := <-journal:
 			members := s.hash.GetReplicas(s.hash.GetShardId(s.address))
 			for i := range members {
-				if members[i] != s.address {
+				if members[i] != s.address && !e.Version.OriginatedOn(members[i]) {
 					go s.sendGossip(ctx, e, members[i])
 				}
 			}

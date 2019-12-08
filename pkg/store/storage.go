@@ -89,6 +89,7 @@ func (s *Store) ImportEntry(e Entry) (imported bool, err error) {
 
 	// If we already have it, we are good
 	if existing, ok := s.store[e.Key]; ok && existing.Version.Equal(e.Version) {
+		log.Printf("Import of %q already exists on this node. ACKing", e.Key)
 		return true, nil
 	}
 

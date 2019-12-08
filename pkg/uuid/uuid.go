@@ -45,6 +45,11 @@ func (u UUID) Equal(v UUID) bool {
 	return u.Seq == v.Seq && u.IP == v.IP && u.Port == v.Port
 }
 
+func (u UUID) OriginatedOn(addr string) bool {
+	v := New(addr)
+	return u.IP == v.IP && u.Port == v.Port
+}
+
 func Ptr(u UUID) *UUID {
 	return &u
 }
