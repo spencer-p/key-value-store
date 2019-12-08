@@ -1,4 +1,4 @@
-vramared	Worked on forwarding
-haskari	Worked on forwarding
-wasper	Added the key count handler
-spjpeter	I wrote the view change logic and tests.
+vramared	Worked on hash updates and gossip
+haskari	Worked on shards handler and gossip
+wasper	Worked on store getting and replacing all entries
+spjpeter	Worked on causal delivery for insert, delete, and get
