@@ -8,14 +8,17 @@ import (
 	"net/url"
 	"path"
 
+	"github.com/spencer-p/cse138/pkg/clock"
 	"github.com/spencer-p/cse138/pkg/msg"
 	"github.com/spencer-p/cse138/pkg/types"
 	"github.com/spencer-p/cse138/pkg/util"
 )
 
 const (
-	VIEWCHANGE_ENDPOINT = "/kv-store/view-change"
-	KEYCOUNT_ENDPOINT   = "/kv-store/key-count"
+	PRIMARY_COLLECT_ENDPOINT   = "/kv-store/primary-collect"
+	SECONDARY_COLLECT_ENDPOINT = "/kv-store/secondary-collect"
+	VIEWCHANGE_ENDPOINT        = "/kv-store/view-change"
+	KEYCOUNT_ENDPOINT          = "/kv-store/key-count"
 )
 
 func (s *State) viewChange(in types.Input, res *types.Response) {
@@ -30,9 +33,58 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	// TODO coordinator view change
 }
 
+// TODO collect from secondaries
+// return our func (s *State) primaryCollect(in types.Input, res *types.Response) types.Response {
 func (s *State) primaryCollect(in types.Input, res *types.Response) {
-	// TODO collect from secondaries
-	// return our state
+	replicas := s.hash.GetReplicas(s.hash.GetShardId(s.address))
+	clockCh := make(chan clock.VectorClock)
+
+	for i := range replicas {
+		go func(addr string) {
+			// Don't make a request if it's just ourselves
+			if addr == s.address {
+				context := s.store.Clock()
+				clockCh <- context
+				return
+			}
+
+			var response types.Response
+			resp, err := s.sendHttp(http.MethodGet,
+				addr,
+				SECONDARY_COLLECT_ENDPOINT,
+				nil,
+				&response)
+			if err != nil {
+				clockCh <- clock.VectorClock{}
+				log.Printf("Failed to send http to %q: %v\n", addr, err)
+				return
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				clockCh <- clock.VectorClock{}
+				log.Printf("Replica at %q returned %d clock\n", addr, resp.StatusCode)
+				return
+			}
+
+			clockCh <- response.CausalCtx
+		}(replicas[i])
+	}
+	waiting := clock.VectorClock{}
+	for _ = range replicas {
+		c := <-clockCh
+		waiting.Max(c)
+	}
+
+	log.Println("Waiting for clock", waiting)
+	err := s.store.WaitUntilCurrent(waiting)
+	if err != nil {
+		log.Println("Wait until current error", err)
+		res.Status = http.StatusServiceUnavailable
+		return
+	}
+
+	res.StorageState = s.store.AllEntries()
+	log.Println("Up to date, sending the state...", res.StorageState)
 }
 
 func (s *State) primaryReplace(in types.Input, res *types.Response) {
