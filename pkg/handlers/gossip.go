@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spencer-p/cse138/pkg/store"
-	"github.com/spencer-p/cse138/pkg/types"
+	"github.com/spencer-p/key-value-store/pkg/store"
+	"github.com/spencer-p/key-value-store/pkg/types"
 )
 
 const (

@@ -3,7 +3,7 @@ package hash
 import (
 	"testing"
 
-	"github.com/spencer-p/cse138/pkg/types"
+	"github.com/spencer-p/key-value-store/pkg/types"
 
 	"github.com/google/go-cmp/cmp"
 )

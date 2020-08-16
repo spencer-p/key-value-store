@@ -6,8 +6,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/spencer-p/cse138/pkg/clock"
-	"github.com/spencer-p/cse138/pkg/uuid"
+	"github.com/spencer-p/key-value-store/pkg/clock"
+	"github.com/spencer-p/key-value-store/pkg/uuid"
 )
 
 var (

@@ -1,4 +1,4 @@
-module github.com/spencer-p/cse138
+module github.com/spencer-p/key-value-store
 
 go 1.13
 
