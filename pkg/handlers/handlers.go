@@ -6,10 +6,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/spencer-p/cse138/pkg/hash"
-	"github.com/spencer-p/cse138/pkg/msg"
-	"github.com/spencer-p/cse138/pkg/store"
-	"github.com/spencer-p/cse138/pkg/types"
+	"github.com/spencer-p/key-value-store/pkg/hash"
+	"github.com/spencer-p/key-value-store/pkg/msg"
+	"github.com/spencer-p/key-value-store/pkg/store"
+	"github.com/spencer-p/key-value-store/pkg/types"
 
 	"github.com/gorilla/mux"
 )

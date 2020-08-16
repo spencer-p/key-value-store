@@ -7,9 +7,9 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/spencer-p/cse138/pkg/clock"
-	"github.com/spencer-p/cse138/pkg/msg"
-	"github.com/spencer-p/cse138/pkg/store"
+	"github.com/spencer-p/key-value-store/pkg/clock"
+	"github.com/spencer-p/key-value-store/pkg/msg"
+	"github.com/spencer-p/key-value-store/pkg/store"
 )
 
 type View struct {

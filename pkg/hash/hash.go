@@ -8,8 +8,8 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/spencer-p/cse138/pkg/types"
-	"github.com/spencer-p/cse138/pkg/util"
+	"github.com/spencer-p/key-value-store/pkg/types"
+	"github.com/spencer-p/key-value-store/pkg/util"
 )
 
 var (

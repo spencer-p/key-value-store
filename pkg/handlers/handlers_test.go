@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/spencer-p/cse138/pkg/msg"
-	"github.com/spencer-p/cse138/pkg/ptr"
-	"github.com/spencer-p/cse138/pkg/types"
+	"github.com/spencer-p/key-value-store/pkg/msg"
+	"github.com/spencer-p/key-value-store/pkg/ptr"
+	"github.com/spencer-p/key-value-store/pkg/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/gorilla/mux"

@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spencer-p/cse138/pkg/handlers"
-	"github.com/spencer-p/cse138/pkg/types"
-	"github.com/spencer-p/cse138/pkg/util"
+	"github.com/spencer-p/key-value-store/pkg/handlers"
+	"github.com/spencer-p/key-value-store/pkg/types"
+	"github.com/spencer-p/key-value-store/pkg/util"
 
 	"github.com/gorilla/mux"
 	"github.com/kelseyhightower/envconfig"

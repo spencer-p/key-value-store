@@ -31,6 +31,6 @@ COPY --from=builder /app/server /server
 # Run the web service on container startup.
 CMD ["/server"]
 
-# Document that the service listens on port 13800.
-ENV PORT 13800
-EXPOSE 13800
+# Document that the service listens on port 9090.
+ENV PORT 9090
+EXPOSE 9090

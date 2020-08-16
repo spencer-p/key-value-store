@@ -2,4 +2,4 @@ tmp/
 vendor/
 
 # the name of the binary
-cse138
+key-value-store
