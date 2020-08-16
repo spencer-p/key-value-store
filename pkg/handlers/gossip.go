@@ -48,13 +48,24 @@ func (s *State) dispatchGossip(ctx context.Context, journal <-chan store.Entry) 
 }
 
 func (s *State) sendIncrement(node string, origin string) {
-	var res types.GossipResponse
-	_, err := s.sendHttp(http.MethodPut,
-		node, "/kv-store/gossip-increment",
-		&types.IncrementInput{Origin: origin}, &res,
-	)
-	if err != nil {
-		log.Println("Failed to send increment to", node, "because", err)
+	tout := RETRY_TIMEOUT
+	for {
+		var res types.GossipResponse
+		resp, err := s.sendHttp(http.MethodPut,
+			node, "/kv-store/gossip-increment",
+			&types.IncrementInput{Origin: origin}, &res,
+		)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			log.Println("Failed to send increment to", node, "because", err)
+			log.Println("Trying again")
+			time.Sleep(tout)
+			tout *= 2
+			if tout > RETRY_TIMEOUT_MAX {
+				tout = RETRY_TIMEOUT_MAX
+			}
+			continue
+		}
+		break
 	}
 }
 

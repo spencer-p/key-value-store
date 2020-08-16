@@ -116,7 +116,12 @@ func (s *State) idHandler(in types.Input, res *types.Response) {
 
 func (s *State) shardsHandler(in types.Input, res *types.Response) {
 	view := s.hash.GetView()
-	res.Shards = s.getShardInfo(view, in.CausalCtx)
+	maxShardId := len(view.Members) / view.ReplFactor
+	shards := make([]int, maxShardId)
+	for i := 1; i <= maxShardId; i++ {
+		shards[i-1] = i
+	}
+	res.Shards = shards
 	res.Message = msg.ShardMembSuccess
 	res.CausalCtx = s.store.Clock()
 }

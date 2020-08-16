@@ -121,10 +121,10 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 	wg.Wait()
 
 	// Calculate all the shard info
-	res.Shards = make([]types.Shard, nshards)
+	shards := make([]types.Shard, nshards)
 	for i := 1; i <= nshards; i++ {
 		replicas := newhash.GetReplicas(i)
-		res.Shards[i-1] = types.Shard{
+		shards[i-1] = types.Shard{
 			Id:       i,
 			Replicas: replicas,
 			KeyCount: func(entries []store.Entry) (count int) {
@@ -138,6 +138,7 @@ func (s *State) viewChange(in types.Input, res *types.Response) {
 			}(statesByPrimary[replicas[0]]),
 		}
 	}
+	res.Shards = shards
 
 	// Set the final info!
 	res.Message = msg.ViewChangeSuccess
